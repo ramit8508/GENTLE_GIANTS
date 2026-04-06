@@ -1193,8 +1193,68 @@ a:hover { opacity: 0.72; }
   font-size: 1rem;
   margin: 0;
 }
+.todo-panel-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
 .todo-panel-head p {
   font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.todo-ai-btn {
+  border: 1px solid #7aa4c7;
+  background: linear-gradient(135deg, #f0f8ff 0%, #d3e8fb 100%);
+  color: #1f4e78;
+  border-radius: 10px;
+  font-weight: 700;
+}
+.todo-ai-btn:hover {
+  border-color: #5d87ab;
+  transform: translateY(-1px);
+}
+.todo-progress-composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.todo-progress-composer input {
+  border: 1.5px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 9px 10px;
+  font-family: inherit;
+  color: var(--text);
+}
+.todo-progress-list {
+  max-height: 130px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+}
+.todo-progress-item {
+  border: 1px dashed #bfd2e2;
+  background: #f4f9fd;
+  border-radius: var(--radius-sm);
+  padding: 7px 9px;
+}
+.todo-progress-item strong {
+  display: block;
+  font-size: 0.73rem;
+  color: #1f4e78;
+}
+.todo-progress-item p {
+  margin-top: 3px;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+.todo-progress-empty {
+  border: 1px dashed var(--border);
+  background: #f7f8fa;
+  border-radius: var(--radius-sm);
+  padding: 8px;
+  font-size: 0.74rem;
   color: var(--text-muted);
 }
 .todo-composer {
@@ -1249,6 +1309,19 @@ a:hover { opacity: 0.72; }
   margin-top: 5px;
   font-size: 0.7rem;
   color: var(--text-muted);
+}
+.todo-ai-chip {
+  display: inline-flex;
+  margin-top: 6px;
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  color: #1f4e78;
+  background: #e3f1ff;
+  border: 1px solid #b5d4ee;
+  border-radius: 999px;
+  padding: 2px 8px;
 }
 .todo-empty {
   border: 1px dashed var(--border);
@@ -1832,6 +1905,10 @@ a:hover { opacity: 0.72; }
   .call-stage, .chat-panel, .draw-stage { min-height: 360px; }
   .todo-composer       { grid-template-columns: 1fr; }
   .todo-composer .btn  { width: 100%; }
+  .todo-panel-head { flex-direction: column; align-items: stretch; }
+  .todo-ai-btn { width: 100%; }
+  .todo-progress-composer { grid-template-columns: 1fr; }
+  .todo-progress-composer .btn { width: 100%; }
   .links-composer      { grid-template-columns: 1fr; }
   .links-composer .btn { width: 100%; }
   .links-item          { flex-direction: column; }

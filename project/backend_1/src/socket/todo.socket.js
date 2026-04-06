@@ -4,9 +4,13 @@ const mongoose = require("mongoose")
 const projectModel = require("../models/project.model")
 const projectTodoModel = require("../models/project-todo.model")
 const projectLinkModel = require("../models/project-link.model")
+const projectProgressModel = require("../models/project-progress.model")
+const { generateAIResponse, extractJSON } = require("../service/ai.service")
 
 const MAX_TODOS_PER_ROOM = 200
 const MAX_LINKS_PER_ROOM = 100
+const MAX_PROGRESS_PER_ROOM = 50
+const aiGenerationLocks = new Set()
 
 const normalizeToken = (token) => {
     if (!token) return null
@@ -57,6 +61,8 @@ const mapTodo = (todo) => ({
     id: todo._id.toString(),
     roomId: todo.roomId.toString(),
     text: todo.text,
+    source: todo.source || "manual",
+    aiBatch: Number.isFinite(todo.aiBatch) ? todo.aiBatch : null,
     completed: Boolean(todo.completed),
     createdBy: {
         id: todo.createdBy?.id ? todo.createdBy.id.toString() : null,
@@ -81,6 +87,180 @@ const getRoomTodos = async (roomId) => {
         .lean()
 
     return todos.reverse().map(mapTodo)
+}
+
+const normalizeAiTodoSuggestions = (value) => {
+    if (!Array.isArray(value)) return []
+
+    return value
+        .map((entry) => {
+            if (typeof entry === "string") return entry
+            if (entry && typeof entry === "object") {
+                return String(entry.task || entry.title || entry.text || "")
+            }
+            return ""
+        })
+        .map((item) => item.trim())
+        .filter(Boolean)
+}
+
+const getDesiredTodoCount = (mode, progressCount) => {
+    if (mode === "followup") {
+        return Math.min(7, Math.max(4, progressCount + 2))
+    }
+    if (mode === "initial") {
+        return Math.min(8, Math.max(5, progressCount + 3))
+    }
+    return Math.min(8, Math.max(5, progressCount + 2))
+}
+
+const fallbackAiTodos = (projectTitle) => [
+    `Define today's top 3 milestones for ${projectTitle || "the project"}`,
+    "Split ownership and assign each task to a collaborator",
+    "Review progress together and post blockers in chat"
+]
+
+const mapProgressEntry = (entry) => ({
+    id: entry._id.toString(),
+    roomId: entry.roomId.toString(),
+    userId: entry.userId.toString(),
+    name: entry.userName,
+    text: entry.text,
+    createdAt: entry.createdAt,
+    updatedAt: entry.updatedAt
+})
+
+const getRoomProgressEntries = async (roomId) => {
+    const entries = await projectProgressModel
+        .find({ roomId })
+        .sort({ createdAt: -1 })
+        .limit(MAX_PROGRESS_PER_ROOM)
+        .lean()
+
+    return entries.map(mapProgressEntry)
+}
+
+const emitRoomProgressList = async (io, roomId) => {
+    const progress = await getRoomProgressEntries(roomId)
+    io.to(roomId).emit("todo:progress-list", { roomId, progress })
+}
+
+const generateAiTodosForRoom = async ({ io, roomId, triggerUser, mode }) => {
+    if (aiGenerationLocks.has(roomId)) return
+    aiGenerationLocks.add(roomId)
+
+    try {
+        const existingTodos = await projectTodoModel.find({ roomId }).sort({ createdAt: 1 }).lean()
+
+        if (mode === "initial" && existingTodos.length > 0) {
+            return
+        }
+
+        if (mode === "followup") {
+            const hasPending = existingTodos.some((todo) => !todo.completed)
+            if (hasPending) return
+        }
+
+        const project = await projectModel.findById(roomId).select("title description tech_stack roles_needed").lean()
+        const projectTitle = project?.title || "this project"
+        const progressEntries = await getRoomProgressEntries(roomId)
+        const progressDigest = progressEntries.length > 0
+            ? progressEntries.map((entry) => `- ${entry.name}: ${entry.text}`).join("\n")
+            : "- No progress shared yet"
+        const desiredTodoCount = getDesiredTodoCount(mode, progressEntries.length)
+
+        const previous = existingTodos.slice(-10).map((todo) => `- ${todo.text}`).join("\n") || "- none"
+
+        const prompt = `
+You are a productivity assistant for software collaborators.
+
+Generate exactly ${desiredTodoCount} short, actionable next tasks for this project.
+
+Rules:
+- Output MUST be valid JSON array
+- No markdown, no explanation
+- Each item should be one line and practical
+- Avoid repeating previous tasks
+
+Project:
+${JSON.stringify(project || { title: projectTitle })}
+
+Collaborators' completed work so far:
+${progressDigest}
+
+Previous tasks:
+${previous}
+
+Expected format:
+["task 1", "task 2", "task 3"]
+`
+
+        let suggestions = []
+        try {
+            const raw = await generateAIResponse(prompt)
+            suggestions = normalizeAiTodoSuggestions(extractJSON(raw))
+        } catch (error) {
+            suggestions = []
+        }
+
+        const normalizedExisting = new Set(existingTodos.map((todo) => String(todo.text || "").trim().toLowerCase()))
+        const deduped = suggestions.filter((item) => !normalizedExisting.has(item.toLowerCase()))
+
+        const finalTodos = deduped.slice(0, desiredTodoCount)
+        if (finalTodos.length < desiredTodoCount) {
+            fallbackAiTodos(projectTitle).forEach((item) => {
+                if (finalTodos.length >= desiredTodoCount) return
+                if (normalizedExisting.has(item.toLowerCase())) return
+                if (finalTodos.some((existing) => existing.toLowerCase() === item.toLowerCase())) return
+                finalTodos.push(item)
+            })
+        }
+
+        let fallbackIndex = 1
+        while (finalTodos.length < desiredTodoCount) {
+            const extra = `Break down next implementation step ${fallbackIndex} for ${projectTitle}`
+            if (!normalizedExisting.has(extra.toLowerCase()) && !finalTodos.some((entry) => entry.toLowerCase() === extra.toLowerCase())) {
+                finalTodos.push(extra)
+            }
+            fallbackIndex += 1
+        }
+
+        if (finalTodos.length === 0) return
+
+        const lastBatch = existingTodos.reduce((max, todo) => {
+            if (typeof todo.aiBatch === "number" && Number.isFinite(todo.aiBatch)) {
+                return Math.max(max, todo.aiBatch)
+            }
+            return max
+        }, 0)
+        const nextBatch = lastBatch + 1
+
+        const docs = await projectTodoModel.insertMany(
+            finalTodos.map((text) => ({
+                roomId,
+                text,
+                source: "ai",
+                aiBatch: nextBatch,
+                createdBy: {
+                    id: triggerUser.id,
+                    name: "CollabHub AI"
+                }
+            }))
+        )
+
+        docs.forEach((doc) => {
+            io.to(roomId).emit("todo:created", {
+                roomId,
+                todo: mapTodo(doc)
+            })
+        })
+    } finally {
+        aiGenerationLocks.delete(roomId)
+    }
+}
+
+const generateSmartTodosForRoom = async ({ io, roomId, triggerUser, mode }) => {
+    await generateAiTodosForRoom({ io, roomId, triggerUser, mode })
 }
 
 const normalizeUrl = (value) => {
@@ -184,11 +364,21 @@ const setupTodoSocket = (server) => {
             socket.data.roomId = roomId
             socket.join(roomId)
 
+            await generateSmartTodosForRoom({
+                io,
+                roomId,
+                triggerUser: socket.user,
+                mode: "initial"
+            })
+
             const todos = await getRoomTodos(roomId)
             socket.emit("todo:list", { roomId, todos })
 
             const links = await getRoomLinks(roomId)
             socket.emit("link:list", { roomId, links })
+
+            const roomProgress = await getRoomProgressEntries(roomId)
+            socket.emit("todo:progress-list", { roomId, progress: roomProgress })
         }
 
         socket.emit("todo:connected", {
@@ -200,6 +390,10 @@ const setupTodoSocket = (server) => {
                 linkCreate: {
                     event: "link:create",
                     payload: { roomId: "<projectId>", title: "Node docs", url: "https://nodejs.org/docs" }
+                },
+                progressUpdate: {
+                    event: "todo:progress-update",
+                    payload: { roomId: "<projectId>", text: "I completed navbar + login validation" }
                 }
             }
         })
@@ -256,6 +450,56 @@ const setupTodoSocket = (server) => {
             })
         })
 
+        socket.on("todo:ai-generate", async (payload = {}) => {
+            const roomId = String(payload.roomId || socket.data.roomId || "").trim()
+            if (!roomId) {
+                socket.emit("todo:error", { message: "roomId is required for AI suggestions" })
+                return
+            }
+
+            const isAllowed = await ensureRoomAccess(socket, roomId)
+            if (!isAllowed) return
+
+            socket.data.roomId = roomId
+            socket.join(roomId)
+
+            await generateSmartTodosForRoom({
+                io,
+                roomId,
+                triggerUser: socket.user,
+                mode: "manual"
+            })
+        })
+
+        socket.on("todo:progress-update", async (payload = {}) => {
+            const roomId = String(payload.roomId || socket.data.roomId || "").trim()
+            const text = String(payload.text || "").trim()
+
+            if (!roomId) {
+                socket.emit("todo:error", { message: "roomId is required to share progress" })
+                return
+            }
+
+            if (!text) {
+                socket.emit("todo:error", { message: "Progress text is required" })
+                return
+            }
+
+            const isAllowed = await ensureRoomAccess(socket, roomId)
+            if (!isAllowed) return
+
+            await projectProgressModel.create({
+                roomId,
+                userId: socket.user.id,
+                userName: socket.user.name,
+                text
+            })
+
+            socket.data.roomId = roomId
+            socket.join(roomId)
+            await emitRoomProgressList(io, roomId)
+        })
+
         socket.on("todo:toggle", async (payload = {}) => {
             const roomId = String(payload.roomId || socket.data.roomId || "").trim()
             const todoId = String(payload.todoId || "").trim()
@@ -300,6 +544,13 @@ const setupTodoSocket = (server) => {
             io.to(roomId).emit("todo:updated", {
                 roomId,
                 todo: mapTodo(todo)
+            })
+
+            await generateSmartTodosForRoom({
+                io,
+                roomId,
+                triggerUser: socket.user,
+                mode: "followup"
             })
         })
 

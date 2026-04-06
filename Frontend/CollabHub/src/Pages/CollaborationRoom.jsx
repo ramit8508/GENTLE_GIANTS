@@ -49,10 +49,13 @@ export default function CollaborationRoom() {
   const [todos, setTodos] = useState([]);
   const [todoDraft, setTodoDraft] = useState("");
   const [todoConnectionState, setTodoConnectionState] = useState("Connecting...");
+  const [aiSuggestingTodos, setAiSuggestingTodos] = useState(false);
   const [savedLinks, setSavedLinks] = useState([]);
   const [linkTitleDraft, setLinkTitleDraft] = useState("");
   const [linkUrlDraft, setLinkUrlDraft] = useState("");
   const [linkNoteDraft, setLinkNoteDraft] = useState("");
+  const [progressDraft, setProgressDraft] = useState("");
+  const [teamProgress, setTeamProgress] = useState([]);
 
   const wsRef = useRef(null);
   const todoSocketRef = useRef(null);
@@ -707,6 +710,27 @@ export default function CollaborationRoom() {
     setLinkNoteDraft("");
   };
 
+  const requestAiTodos = () => {
+    setAiSuggestingTodos(true);
+    sendTodoEvent("todo:ai-generate", { roomId: id });
+    window.setTimeout(() => {
+      setAiSuggestingTodos(false);
+    }, 2600);
+  };
+
+  const shareProgress = (event) => {
+    event.preventDefault();
+    const text = progressDraft.trim();
+    if (!text) return;
+
+    sendTodoEvent("todo:progress-update", {
+      roomId: id,
+      text,
+    });
+
+    setProgressDraft("");
+  };
+
   useEffect(() => {
     if (!id || !user?._id) return;
 
@@ -747,6 +771,7 @@ export default function CollaborationRoom() {
 
     socket.on("todo:created", (payload) => {
       if (!payload?.todo) return;
+      setAiSuggestingTodos(false);
       setTodos((prev) => [...prev, payload.todo]);
     });
 
@@ -755,12 +780,17 @@ export default function CollaborationRoom() {
       setTodos((prev) => prev.map((item) => (item.id === payload.todo.id ? payload.todo : item)));
     });
 
+    socket.on("todo:progress-list", (payload) => {
+      setTeamProgress(Array.isArray(payload?.progress) ? payload.progress : []);
+    });
+
     socket.on("link:created", (payload) => {
       if (!payload?.link) return;
       setSavedLinks((prev) => [...prev, payload.link]);
     });
 
     socket.on("todo:error", (payload) => {
+      setAiSuggestingTodos(false);
       if (payload?.message) {
         appendSystemMessage(`Todo: ${payload.message}`);
       }
@@ -809,6 +839,33 @@ export default function CollaborationRoom() {
                 <h3>Shared Project Todo</h3>
                 <p>{todos.length} tasks synced for all collaborators</p>
               </div>
+              <button className="btn btn-sm todo-ai-btn" type="button" onClick={requestAiTodos} disabled={aiSuggestingTodos}>
+                {aiSuggestingTodos ? "Generating..." : "AI Suggest Next Todos"}
+              </button>
+            </div>
+
+            <form className="todo-progress-composer" onSubmit={shareProgress}>
+              <input
+                type="text"
+                value={progressDraft}
+                onChange={(e) => setProgressDraft(e.target.value)}
+                placeholder="Tell AI what you completed so far (example: finished auth API and navbar bugs)."
+                maxLength={300}
+              />
+              <button className="btn btn-outline" type="submit">Share Progress</button>
+            </form>
+
+            <div className="todo-progress-list" role="list">
+              {teamProgress.length === 0 ? (
+                <p className="todo-progress-empty">No progress updates yet from collaborators.</p>
+              ) : (
+                teamProgress.map((entry) => (
+                  <article key={entry.id || `${entry.userId}_${entry.updatedAt || entry.text}`} className="todo-progress-item" role="listitem">
+                    <strong>{entry.name}</strong>
+                    <p>{entry.text}</p>
+                  </article>
+                ))
+              )}
             </div>
 
             <form className="todo-composer" onSubmit={addTodo}>
@@ -841,6 +898,7 @@ export default function CollaborationRoom() {
                         ? `Completed by ${todo.completedBy?.name || "Collaborator"}`
                         : `Not done - added by ${todo.createdBy?.name || "Collaborator"}`}
                     </small>
+                    {todo.source === "ai" && <span className="todo-ai-chip">AI Suggestion</span>}
                   </article>
                 ))
               )}

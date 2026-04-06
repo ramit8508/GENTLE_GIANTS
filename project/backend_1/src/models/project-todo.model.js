@@ -14,6 +14,16 @@ const projectTodoSchema = new mongoose.Schema(
             trim: true,
             maxlength: 240
         },
+        source: {
+            type: String,
+            enum: ["manual", "ai"],
+            default: "manual",
+            index: true
+        },
+        aiBatch: {
+            type: Number,
+            default: null
+        },
         createdBy: {
             id: {
                 type: mongoose.Schema.Types.ObjectId,

@@ -50,7 +50,7 @@ const registerUser=async(req,res)=>{
             httpOnly:true,
             secure:true
         })
-        return res.status(201).json(new ApiResponse(201, { user: createdUser, accessToken, refreshToken }, "User registered successfully"))
+        return res.status(201).json(new ApiResponse(201, { user: createdUser}, "User registered successfully"))
     }
     catch(error)
     {

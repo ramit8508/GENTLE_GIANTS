@@ -11,4 +11,5 @@ router.route("/delete/:id").delete(authmiddleware,projectOwner,projectController
 router.route("/request/:id").post(authmiddleware,projectControllers.requestToJoinProject)
 router.route("/respond/:id").post(authmiddleware,projectOwner,projectControllers.respondJoin)
 router.route("/my-projects").get(authmiddleware,projectControllers.getMyProjects)
+router.route("/:id").get(projectControllers.getProjectById)
 module.exports=router

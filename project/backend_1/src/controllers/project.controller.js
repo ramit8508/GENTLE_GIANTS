@@ -17,7 +17,7 @@ const createProject=async(req,res)=>{
             roles_needed,
             createdBy:req.user._id
         })
-        const createdProject=await projectModel.findById(project._id).select("-createdAt -updatedAt")
+        const createdProject=await projectModel.findById(project._id).select("-createdAt -updatedAt " )
         return res.status(201).json(new ApiResponse(201,"Project created successfully",createdProject))
     }
     catch (error) {
@@ -213,6 +213,21 @@ const getMyProjects=async(req,res)=>{
         throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while fetching your projects")
     }
 }
+const getProjectById=async(req,res)=>{
+    try {
+        const project = await projectModel.findById(req.params.id)
+            .populate("createdBy","name")
+            .populate("members.user","name")
+            .populate("join_requests.user","name")
+        if(!project){
+            throw new ApiError(404,"Project not found")
+        }
+        return res.status(200).json(new ApiResponse(200,"Project fetched successfully",project))
+    } catch(error){
+        throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while fetching the project")
+    }
+}
 
 
-module.exports={createProject,getAllProjects,searchProject,updateProject,deleteProject,requestToJoinProject,respondJoin,getMyProjects}
+
+module.exports={createProject,getAllProjects,searchProject,updateProject,deleteProject,requestToJoinProject,respondJoin,getMyProjects,getProjectById}

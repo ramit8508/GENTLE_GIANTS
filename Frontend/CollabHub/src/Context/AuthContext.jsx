@@ -43,17 +43,17 @@ export function AuthProvider({ children }) {
   }, []);
 
   const login = async (credentials) => {
-    await authAPI.login(credentials); // cookie is set automatically
+    await authAPI.login(credentials); 
     const me = await authAPI.me();
     setUser(me.data.user);
     setIsLoggedIn(true);
   };
 
   const register = async (data) => {
-    await authAPI.register(data);
-    const me = await authAPI.me();
-    setUser(me.data.user);
-    setIsLoggedIn(true);
+    const res = await authAPI.register(data);
+    setUser(null);
+    setIsLoggedIn(false);
+    return res.data;
   };
 
   const logout = async () => {

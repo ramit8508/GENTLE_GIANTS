@@ -1,3 +1,5 @@
+import axios from "axios";
+
 const STORAGE_KEY = "collabhub_mock_storage_v1";
 const SESSION_KEY = "collabhub_mock_session";
 
@@ -12,6 +14,7 @@ const defaultSeed = () => {
     name: "Demo User",
     email: "demo@gmail.com",
     password: "Password1",
+    is_verified: true,
     skills: ["React", "Node.js"],
     github: "https://github.com/demo",
     bio: "Building collab-first products.",
@@ -89,6 +92,83 @@ const normalizeProjectForClient = (project) => ({
   removed: project.removed || [],
 });
 
+const normalizeBackendProjectForClient = (project) => {
+  if (!project) return null;
+
+  const createdBy = project.createdBy || project.created_by || null;
+  const normalizedCreator = createdBy
+    ? {
+        _id: createdBy._id || createdBy.id || createdBy,
+        name: createdBy.name || "Unknown",
+        email: createdBy.email || "",
+      }
+    : null;
+
+  return {
+    ...project,
+    created_by: normalizedCreator,
+    members: (project.members || []).map((m) => ({
+      ...m,
+      role: m.role || "Member",
+      user:
+        typeof m.user === "object"
+          ? {
+              _id: m.user?._id || m.user?.id,
+              name: m.user?.name || "Unknown",
+            }
+          : { _id: m.user, name: "Unknown" },
+    })),
+    join_requests: (project.join_requests || []).map((r) => ({
+      ...r,
+      user:
+        typeof r.user === "object"
+          ? {
+              _id: r.user?._id || r.user?.id,
+              name: r.user?.name || "Unknown",
+            }
+          : { _id: r.user, name: "Unknown" },
+      status: r.status || "pending",
+    })),
+    invitations: (project.invitations || []).map((i) => ({
+      ...i,
+      userId: i.userId || i.user?._id || i.user,
+      status: i.status || "pending",
+    })),
+    removed: (project.removed || project.removed_members || []).map((r) => String(r.user || r)),
+  };
+};
+
+const useBackend = (import.meta.env.VITE_USE_BACKEND ?? "true") === "true";
+const backendClient = axios.create({
+  baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api",
+  withCredentials: true,
+});
+
+const unwrapApiData = (response) => {
+  const payload = response?.data;
+  if (payload && typeof payload === "object" && "data" in payload) {
+    return payload.data;
+  }
+  return payload;
+};
+
+const isFallbackCandidate = (err) => {
+  const status = err?.response?.status;
+  return !status || status >= 500 || status === 404;
+};
+
+const runBackendWithFallback = async (backendFn, mockFn) => {
+  if (!useBackend) return mockFn();
+  try {
+    return await backendFn();
+  } catch (err) {
+    if (mockFn && isFallbackCandidate(err)) {
+      return mockFn();
+    }
+    throw err;
+  }
+};
+
 const API = {
   interceptors: {
     response: {
@@ -106,7 +186,7 @@ const API = {
 };
 
 // ─── Auth API ──────────────────────────────────────────────────────────────
-export const authAPI = {
+const mockAuthAPI = {
   register: async (data) => {
     const store = readStore();
     const exists = store.users.some((u) => u.email.toLowerCase() === data.email.toLowerCase());
@@ -117,20 +197,27 @@ export const authAPI = {
       name: data.name,
       email: data.email,
       password: data.password,
+      is_verified: false,
       skills: data.skills || [],
       github: data.github || "",
       bio: data.bio || "",
     };
     store.users.push(user);
     writeStore(store);
-    setSessionUserId(user._id);
-    return ok({ user: getSafeUser(user) });
+    return ok({
+      user: getSafeUser(user),
+      requiresEmailVerification: true,
+      message: "Verify your email. We have sent the verification mail on your email.",
+    });
   },
   login: async (data) => {
     const store = readStore();
     const user = store.users.find((u) => u.email.toLowerCase() === data.email.toLowerCase());
     if (!user || user.password !== data.password) {
       return error(401, "Invalid email or password");
+    }
+    if (!user.is_verified) {
+      return error(403, "Verify your mail first");
     }
     setSessionUserId(user._id);
     return ok({ user: getSafeUser(user) });
@@ -173,7 +260,7 @@ export const authAPI = {
 };
 
 // ─── AI API ────────────────────────────────────────────────────────────────
-export const aiAPI = {
+const mockAiAPI = {
   match: async ({ project, users }) => {
     const picks = (users || []).slice(0, 4).map((u) => ({
       id: u._id || u.id,
@@ -200,7 +287,7 @@ export const aiAPI = {
 };
 
 // ─── Project API ───────────────────────────────────────────────────────────
-export const projectAPI = {
+const mockProjectAPI = {
   create: async (data) => {
     const store = readStore();
     const userId = getSessionUserId();
@@ -396,5 +483,163 @@ export const projectAPI = {
     return ok({ success: true });
   },
 };
+
+const backendAuthAPI = {
+  register: async (data) => {
+    const payload = {
+      name: data.name,
+      email: data.email,
+      password: data.password,
+      skills: data.skills?.length ? data.skills : ["General"],
+      bio: data.bio || "CollabHub user",
+      github: data.github || "https://github.com/collabhub-user",
+    };
+
+    const res = await backendClient.post("/auth/register", payload);
+    const content = unwrapApiData(res) || {};
+    return { data: { user: content.user || content, requiresEmailVerification: true, message: res.data?.message } };
+  },
+  login: async (data) => {
+    const res = await backendClient.post("/auth/login", data);
+    const content = unwrapApiData(res) || {};
+    return { data: { user: content.user || content } };
+  },
+  logout: async () => {
+    await backendClient.post("/auth/logout");
+    return { data: { success: true } };
+  },
+  me: async () => {
+    const res = await backendClient.get("/auth/profile");
+    const user = unwrapApiData(res);
+    return { data: { user } };
+  },
+  updateProfile: async (data) => mockAuthAPI.updateProfile(data),
+  getUsers: async () => mockAuthAPI.getUsers(),
+  getUserById: async (id) => mockAuthAPI.getUserById(id),
+};
+
+const backendAiAPI = {
+  match: async ({ project, users }) => {
+    const res = await backendClient.post("/ai/match", { project, users });
+    return unwrapApiData(res) || res.data;
+  },
+  improveIdea: async ({ idea }) => {
+    const res = await backendClient.post("/ai/improve-idea", { idea });
+    return res.data;
+  },
+  enhanceProfile: async ({ bio }) => {
+    const res = await backendClient.post("/ai/enhance-profile", { bio });
+    return res.data;
+  },
+};
+
+const backendProjectAPI = {
+  create: async (data) => {
+    await backendClient.post("/project/create", {
+      title: data.title,
+      description: data.description,
+      tech_stack: data.techStack || data.tech_stack || [],
+      roles_needed: data.rolesNeeded || data.roles_needed || [],
+    });
+    return { data: { success: true } };
+  },
+  getAll: async () => {
+    const res = await backendClient.get("/project/");
+    const projects = (unwrapApiData(res) || []).map(normalizeBackendProjectForClient);
+    return { data: { projects } };
+  },
+  getById: async (id) => {
+    const res = await backendClient.get(`/project/${id}`);
+    return { data: { project: normalizeBackendProjectForClient(unwrapApiData(res)) } };
+  },
+  search: async (params) => {
+    const query = typeof params === "string" ? { q: params } : params || {};
+    const res = await backendClient.get("/project/search", { params: query });
+    const projects = (unwrapApiData(res) || []).map(normalizeBackendProjectForClient);
+    return { data: { projects } };
+  },
+  update: async (id, data) => {
+    const res = await backendClient.put(`/project/update/${id}`, {
+      title: data.title,
+      description: data.description,
+      tech_stack: data.techStack ?? data.tech_stack,
+      roles_needed: data.rolesNeeded ?? data.roles_needed,
+    });
+    const project = res?.data?.updatedProject ? normalizeBackendProjectForClient(res.data.updatedProject) : null;
+    return { data: { project } };
+  },
+  delete: async (id) => {
+    await backendClient.delete(`/project/delete/${id}`);
+    return { data: { success: true } };
+  },
+  requestJoin: async (projectId) => {
+    const res = await backendClient.post(`/project/request/${projectId}`);
+    return { data: { message: res?.data?.message || "Join request sent" } };
+  },
+  respondJoin: async (id, userid, action) => {
+    await backendClient.post(`/project/respond/${id}`, { userid, action, role: "other" });
+    return { data: { success: true } };
+  },
+  getMyProjects: async () => {
+    const res = await backendClient.get("/project/my-projects");
+    const data = unwrapApiData(res) || {};
+    return {
+      data: {
+        createdProjects: (data.createdProjects || []).map(normalizeBackendProjectForClient),
+        joinedProjects: (data.joinedProjects || []).map(normalizeBackendProjectForClient),
+        pendingRequests: (data.pendingRequests || []).map(normalizeBackendProjectForClient),
+        pendingInvitations: (data.pendingInvitations || []).map(normalizeBackendProjectForClient),
+        removedFromProjects: (data.removedFromProjects || []).map(normalizeBackendProjectForClient),
+      },
+    };
+  },
+  removeMember: async (projectId, userId) => {
+    await backendClient.post(`/project/remove-member/${projectId}`, { userId });
+    return { data: { success: true } };
+  },
+  inviteMember: async (projectId, userId) => {
+    const res = await backendClient.post(`/project/invite/${projectId}`, { userId });
+    return { data: { message: res?.data?.message || "Invite sent" } };
+  },
+  respondInvite: async (projectId, action) => {
+    await backendClient.post(`/project/respond-invitation/${projectId}`, { action, role: "other" });
+    return { data: { success: true } };
+  },
+};
+
+export const authAPI = {
+  register: (data) => runBackendWithFallback(() => backendAuthAPI.register(data), () => mockAuthAPI.register(data)),
+  login: (data) => runBackendWithFallback(() => backendAuthAPI.login(data), () => mockAuthAPI.login(data)),
+  logout: () => runBackendWithFallback(() => backendAuthAPI.logout(), () => mockAuthAPI.logout()),
+  me: () => runBackendWithFallback(() => backendAuthAPI.me(), () => mockAuthAPI.me()),
+  updateProfile: (data) => runBackendWithFallback(() => backendAuthAPI.updateProfile(data), () => mockAuthAPI.updateProfile(data)),
+  getUsers: () => runBackendWithFallback(() => backendAuthAPI.getUsers(), () => mockAuthAPI.getUsers()),
+  getUserById: (id) => runBackendWithFallback(() => backendAuthAPI.getUserById(id), () => mockAuthAPI.getUserById(id)),
+};
+
+export const aiAPI = {
+  match: (payload) => runBackendWithFallback(() => backendAiAPI.match(payload), () => mockAiAPI.match(payload)),
+  improveIdea: (payload) => runBackendWithFallback(() => backendAiAPI.improveIdea(payload), () => mockAiAPI.improveIdea(payload)),
+  enhanceProfile: (payload) => runBackendWithFallback(() => backendAiAPI.enhanceProfile(payload), () => mockAiAPI.enhanceProfile(payload)),
+};
+
+export const projectAPI = {
+  create: (data) => runBackendWithFallback(() => backendProjectAPI.create(data), () => mockProjectAPI.create(data)),
+  getAll: () => runBackendWithFallback(() => backendProjectAPI.getAll(), () => mockProjectAPI.getAll()),
+  getById: (id) => runBackendWithFallback(() => backendProjectAPI.getById(id), () => mockProjectAPI.getById(id)),
+  search: (params) => runBackendWithFallback(() => backendProjectAPI.search(params), () => mockProjectAPI.search(params)),
+  update: (id, data) => runBackendWithFallback(() => backendProjectAPI.update(id, data), () => mockProjectAPI.update(id, data)),
+  delete: (id) => runBackendWithFallback(() => backendProjectAPI.delete(id), () => mockProjectAPI.delete(id)),
+  requestJoin: (projectId) => runBackendWithFallback(() => backendProjectAPI.requestJoin(projectId), () => mockProjectAPI.requestJoin(projectId)),
+  respondJoin: (id, userid, action) => runBackendWithFallback(() => backendProjectAPI.respondJoin(id, userid, action), () => mockProjectAPI.respondJoin(id, userid, action)),
+  getMyProjects: () => runBackendWithFallback(() => backendProjectAPI.getMyProjects(), () => mockProjectAPI.getMyProjects()),
+  removeMember: (projectId, userId) => runBackendWithFallback(() => backendProjectAPI.removeMember(projectId, userId), () => mockProjectAPI.removeMember(projectId, userId)),
+  inviteMember: (projectId, userId) => runBackendWithFallback(() => backendProjectAPI.inviteMember(projectId, userId), () => mockProjectAPI.inviteMember(projectId, userId)),
+  respondInvite: (projectId, action) => runBackendWithFallback(() => backendProjectAPI.respondInvite(projectId, action), () => mockProjectAPI.respondInvite(projectId, action)),
+};
+
+if (useBackend) {
+  API.interceptors = backendClient.interceptors;
+}
 
 export default API;

@@ -38,7 +38,7 @@ const projectSchema=new mongoose.Schema({
             message:"Roles are required"
         }
     },
-    join_requests:{
+    join_requests:[{
        user:{
         type:mongoose.Schema.Types.ObjectId,
         ref:"User"
@@ -51,9 +51,9 @@ const projectSchema=new mongoose.Schema({
        },
        requested_at:{
         type:Date,
-        default:Date.now()
+        default:Date.now
        }
-    },
+    }],
     members:[
         {
             user:{

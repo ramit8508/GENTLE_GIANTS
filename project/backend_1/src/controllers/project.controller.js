@@ -100,5 +100,30 @@ const deleteProject=async(req,res)=>{
             return res.status(500).json({message:error.message})
         }
     }   
+const requestToJoinProject=async(req,res)=>{
+    try{
+        const id=req.params.id
+        const project = await projectModel.findById(id)
+        if(!project){
+        throw new ApiError(404,"Project not found")}
+        const user= await userModel.findById(req.user.id)
+        const skillMatch = project.tech_stack.some(skill =>
+            user.skills.includes(skill))
+        if(!skillMatch){
+           throw new ApiError(400,"You are lacking the skills required for this project")
+        }
+        const requested=project.join_requests.some(
+            r=> r.user && r.user.toString()===req.user._id.toString()
+        )
+          if(requested){
+            throw new ApiError(400,"You already requested to join this project")
+        }
+        project.join_requests.push({ user: req.user._id })
+        await project.save()
+        return res.status(200).json(new ApiResponse(200,"Request sent to project creator",project))
+    }
+    catch(error){
+        throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while requesting to join the project")}
+    }
 
-module.exports={createProject,getAllProjects,searchProject,updateProject,deleteProject}
+module.exports={createProject,getAllProjects,searchProject,updateProject,deleteProject,requestToJoinProject}

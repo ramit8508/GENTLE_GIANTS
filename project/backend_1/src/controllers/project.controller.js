@@ -1,5 +1,6 @@
 const projectModel=require("../models/project.model")
 const userModel=require("../models/user.model")
+const mongoose=require("mongoose")
 const ApiError=require("../utils/api-error")
 const ApiResponse=require("../utils/api-response")
 
@@ -260,12 +261,41 @@ const inviteMember=async(req, res)=> {
     try {
         const { id } = req.params; // project id
         const { userId } = req.body;
+        if(!mongoose.Types.ObjectId.isValid(String(id))){
+            throw new ApiError(400, "Invalid project id")
+        }
+        if(!userId){
+            throw new ApiError(400, "User id is required")
+        }
+        if(!mongoose.Types.ObjectId.isValid(String(userId))){
+            throw new ApiError(400, "Invalid user id")
+        }
         const project = await projectModel.findById(id);
-        if (!project) return res.status(404).json({ message: "Project not found" });
-        const isMember = project.members.some(m => m.user.toString() === userId);
-        if (isMember) return res.status(400).json({ message: "User is already a member" });
-        const alreadyInvited = project.invitations.some(i => i.user.toString() === userId && i.status === "pending");
-        if (alreadyInvited) return res.status(400).json({ message: "User is already invited" });
+        if (!project) {
+            throw new ApiError(404, "Project not found")
+        }
+        const ownerId = project.createdBy || project.created_by
+        if(!ownerId){
+            throw new ApiError(400, "Project owner is missing")
+        }
+        if(String(ownerId) !== String(req.user._id || req.user.id)){
+            throw new ApiError(403, "Only project owner can invite members")
+        }
+        if(String(req.user._id) === String(userId)){
+            throw new ApiError(400, "You cannot invite yourself")
+        }
+        const invitedUser = await userModel.findById(userId)
+        if(!invitedUser){
+            throw new ApiError(404, "User not found")
+        }
+        const isMember = project.members.some(m => String(m.user) === String(userId));
+        if (isMember) {
+            throw new ApiError(400, "User is already a member")
+        }
+        const alreadyInvited = project.invitations.some(i => String(i.user) === String(userId) && i.status === "pending");
+        if (alreadyInvited) {
+            throw new ApiError(400, "User is already invited")
+        }
         project.invitations.push({ user: userId });
         await project.save();
         return res.status(200).json(new ApiResponse(200,"Invitation sent successfully",project));

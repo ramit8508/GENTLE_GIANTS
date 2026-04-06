@@ -1043,6 +1043,17 @@ a:hover { opacity: 0.72; }
 }
 .collab-contact-card p { font-size: 0.84rem; color: var(--text-secondary); }
 .collab-contact-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.collab-contact-center-note {
+  margin: 2px auto 0;
+  font-size: 0.74rem;
+  color: var(--text-secondary);
+  text-align: center;
+  background: #f4ede1;
+  border: 1px dashed var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  max-width: 420px;
+}
 .collab-contact-hint {
   font-size: 0.75rem;
   color: var(--text-muted);
@@ -1075,6 +1086,14 @@ a:hover { opacity: 0.72; }
   color: var(--text-secondary);
   text-align: center;
 }
+.remote-video .video-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+  background: #000;
+}
 .remote-video p { font-size: 0.84rem; }
 .video-label {
   position: absolute;
@@ -1099,6 +1118,14 @@ a:hover { opacity: 0.72; }
   background: linear-gradient(145deg, #e7ddd0 0%, #d5c7b5 100%);
   box-shadow: var(--shadow-sm);
 }
+.local-video .video-feed {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 8px;
+  display: block;
+  background: #000;
+}
 
 .call-controls {
   position: relative;
@@ -1106,6 +1133,96 @@ a:hover { opacity: 0.72; }
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+}
+.call-control-btn {
+  border-radius: 999px;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  background: rgba(20, 18, 16, 0.38);
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(5px);
+}
+.call-control-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 8px 14px rgba(0, 0, 0, 0.18);
+}
+.call-control-start {
+  background: rgba(31, 122, 69, 0.88);
+  border-color: rgba(115, 224, 163, 0.9);
+}
+.call-control-leave {
+  background: rgba(163, 43, 35, 0.85);
+  border-color: rgba(255, 139, 132, 0.86);
+}
+.call-control-idle {
+  background: rgba(20, 18, 16, 0.34);
+  border-color: rgba(255, 255, 255, 0.7);
+}
+.call-control-active {
+  background: rgba(199, 120, 80, 0.92);
+  border-color: rgba(255, 203, 170, 0.9);
+}
+
+.draw-fullpage {
+  min-height: 74vh;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: #fff;
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  overflow: hidden;
+}
+
+.draw-fullpage-tools {
+  border-right: 1px solid var(--border);
+  background: var(--bg-warm);
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.draw-fullpage-tools h3 {
+  margin: 0 0 6px;
+  font-family: 'Outfit', sans-serif;
+  font-size: 0.95rem;
+  color: var(--text-secondary);
+}
+
+.draw-tool-label {
+  font-size: 0.74rem;
+  color: var(--text-muted);
+  font-weight: 600;
+}
+
+.draw-fullpage-tools input[type="color"] {
+  width: 100%;
+  height: 36px;
+  border: 1px solid var(--border-input);
+  border-radius: 8px;
+  background: #fff;
+}
+
+.draw-fullpage-tools input[type="range"] {
+  width: 100%;
+}
+
+.draw-fullpage-canvas-wrap {
+  padding: 14px;
+  background: #f7f4ee;
+  min-height: 70vh;
+}
+
+.draw-fullpage-canvas {
+  width: 100%;
+  height: 100%;
+  background: #fff;
+  border: 1px solid var(--border-input);
+  border-radius: 10px;
+  touch-action: none;
+  cursor: crosshair;
 }
 
 .draw-stage {
@@ -1173,9 +1290,11 @@ a:hover { opacity: 0.72; }
   background: #fff;
   border: 1.5px solid var(--border);
   border-radius: var(--radius-lg);
-  min-height: 430px;
+  height: 430px;
+  max-height: 430px;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .chat-header {
   display: flex;
@@ -1210,6 +1329,7 @@ a:hover { opacity: 0.72; }
   display: flex;
   flex-direction: column;
   gap: 10px;
+  min-height: 0;
 }
 .chat-bubble {
   max-width: 90%;
@@ -1289,6 +1409,9 @@ a:hover { opacity: 0.72; }
   .collab-main { grid-template-columns: 1fr; }
   .collab-main.draw-open { grid-template-columns: 1fr; }
   .draw-stage { grid-template-columns: 1fr; }
+  .draw-fullpage { grid-template-columns: 1fr; min-height: 80vh; }
+  .draw-fullpage-tools { border-right: none; border-bottom: 1px solid var(--border); }
+  .draw-fullpage-canvas-wrap { min-height: 56vh; }
   .draw-tools {
     border-right: none;
     border-bottom: 1px solid var(--border);

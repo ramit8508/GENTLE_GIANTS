@@ -15,6 +15,19 @@ export default function ProjectDetail() {
   const [aiLoading, setAiLoading] = useState(false);
   const [allUsers, setAllUsers] = useState([]); // Store all users for AI matching
 
+  const toMessageText = (value, fallback = '') => {
+    if (typeof value === 'string') return value;
+    if (value && typeof value === 'object') {
+      if (typeof value.message === 'string') return value.message;
+      try {
+        return JSON.stringify(value);
+      } catch {
+        return fallback;
+      }
+    }
+    return fallback;
+  };
+
   useEffect(() => {
     const fetchProject = async () => {
       try {
@@ -66,9 +79,9 @@ export default function ProjectDetail() {
     setLoading(true);
     try {
       const res = await projectAPI.requestJoin(project._id);
-      setMessage(res.data.message);
+      setMessage(toMessageText(res?.data?.message, 'Request sent'));
     } catch (err) {
-      setMessage(err.response?.data?.message || 'Request failed');
+      setMessage(toMessageText(err?.response?.data?.message, 'Request failed'));
     } finally {
       setLoading(false);
     }
@@ -77,9 +90,9 @@ export default function ProjectDetail() {
   const handleInvite = async (userId) => {
     try {
       const res = await projectAPI.inviteMember(project._id, userId);
-      setMessage(res.data.message);
+      setMessage(toMessageText(res?.data?.message, 'Invite sent'));
     } catch (err) {
-       setMessage(err.response?.data?.message || 'Invite failed');
+       setMessage(toMessageText(err?.response?.data?.message, 'Invite failed'));
     }
   };
 
@@ -144,8 +157,8 @@ export default function ProjectDetail() {
           )}
 
           {message && (
-            <div className={`alert ${message.includes('lacking') || message.includes('already') || message.includes('failed') ? 'alert-error' : 'alert-success'}`}>
-              {message}
+            <div className={`alert ${toMessageText(message).toLowerCase().includes('lacking') || toMessageText(message).toLowerCase().includes('already') || toMessageText(message).toLowerCase().includes('failed') || toMessageText(message).toLowerCase().includes('not found') || toMessageText(message).toLowerCase().includes('cannot') ? 'alert-error' : 'alert-success'}`}>
+              {toMessageText(message)}
             </div>
           )}
 
@@ -192,17 +205,22 @@ export default function ProjectDetail() {
               <div className="stagger-children">
                 {[...recommendations]
                   .sort((a, b) => (Number(b?.percentage) || 0) - (Number(a?.percentage) || 0))
-                  .map((rec, i) => (
-                  <div key={i} className="ai-recommendation-card fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
+                  .map((rec, i) => {
+                  const recommendedUserId = rec?.id || rec?._id;
+
+                  return (
+                  <div key={recommendedUserId || i} className="ai-recommendation-card fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
                     <div className="ai-match-header">
                       <div className="ai-match-info">
                         <strong 
                           className="clickable-name"
                           onClick={() => {
-                            const fullUser = allUsers.find(u => u._id === rec.id || u.id === rec.id);
-                            navigate(`/user/${rec.id}`, { state: { user: fullUser || rec } });
+                            if (!recommendedUserId) return;
+                            const fullUser = allUsers.find(u => String(u._id || u.id) === String(recommendedUserId));
+                            navigate(`/user/${recommendedUserId}`, { state: { user: fullUser || rec } });
                           }}
                           title="View Profile"
+                          style={{ cursor: recommendedUserId ? 'pointer' : 'not-allowed', opacity: recommendedUserId ? 1 : 0.7 }}
                         >
                           {rec.name}
                         </strong>
@@ -224,12 +242,20 @@ export default function ProjectDetail() {
                     <button 
                       className="btn btn-primary btn-sm" 
                       style={{ marginTop: '16px', display: 'block', width: '100%' }}
-                      onClick={() => handleInvite(rec.id)}
+                      onClick={() => {
+                        if (!recommendedUserId) {
+                          setMessage('User not found for this recommendation');
+                          return;
+                        }
+                        handleInvite(recommendedUserId);
+                      }}
+                      disabled={!recommendedUserId}
                     >
-                      ✉️ Send Invite
+                      {recommendedUserId ? '✉️ Send Invite' : 'Invite Unavailable'}
                     </button>
                   </div>
-                ))}
+                );
+                })}
               </div>
             </div>
           )}

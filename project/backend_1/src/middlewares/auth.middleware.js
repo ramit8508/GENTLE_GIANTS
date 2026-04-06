@@ -4,7 +4,8 @@ const ApiError = require("../utils/api-error")
 
 const authmiddleware = async (req, res, next) => {
     try {
-        const token = req.cookies?.accessToken || req.headers?.authorization?.replace("Bearer ", "")
+        const headerToken = req.headers?.authorization?.replace("Bearer ", "")
+        const token = headerToken || req.cookies?.accessToken
         if (!token) {
             throw new ApiError(401, "Unauthorized request")
         }

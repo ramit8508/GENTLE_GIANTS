@@ -47,7 +47,7 @@ const registerUser=async(req,res)=>{
         }
         res.cookie("accessToken",accessToken,cookieOptions)
         res.cookie("refreshToken",refreshToken,cookieOptions)
-        return res.status(201).json(new ApiResponse(201, { user: createdUser }, "User registered successfully"))
+        return res.status(201).json(new ApiResponse(201, { user: createdUser, accessToken }, "User registered successfully"))
     }
     catch(error)
     {
@@ -81,7 +81,7 @@ const loginUser=async(req,res)=>{
         }
         res.cookie("accessToken",accessToken,cookieOptions)
         res.cookie("refreshToken",refreshToken,cookieOptions)
-        return res.status(200).json(new ApiResponse(200, { user: loggedInUser}, "User logged in successfully"))
+        return res.status(200).json(new ApiResponse(200, { user: loggedInUser, accessToken}, "User logged in successfully"))
     }
     catch(error)
     {
@@ -120,4 +120,32 @@ const getProfile=async(req,res)=>{
     }
 }
 
-module.exports={registerUser,loginUser,logoutUser,getProfile}
+const getUsers=async(req,res)=>{
+    try {
+        const users=await userModel
+            .find({ _id: { $ne: req.user._id } })
+            .select("-password -refreshToken -createdAt -updatedAt")
+        return res.status(200).json(new ApiResponse(200, { users }, "Users fetched successfully"))
+    }
+    catch(error)
+    {
+        throw new ApiError(error?.statusCode || 500, error?.message || "Something went wrong")
+    }
+}
+
+const getUserById=async(req,res)=>{
+    try {
+        const { id } = req.params
+        const user = await userModel.findById(id).select("-password -refreshToken -createdAt -updatedAt")
+        if(!user){
+            throw new ApiError(404, "User not found")
+        }
+        return res.status(200).json(new ApiResponse(200, { user }, "User fetched successfully"))
+    }
+    catch(error)
+    {
+        throw new ApiError(error?.statusCode || 500, error?.message || "Something went wrong")
+    }
+}
+
+module.exports={registerUser,loginUser,logoutUser,getProfile,getUsers,getUserById}

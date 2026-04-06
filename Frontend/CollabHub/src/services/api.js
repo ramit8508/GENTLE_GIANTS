@@ -3,6 +3,7 @@ import axios from "axios";
 const STORAGE_KEY = "collabhub_mock_storage_v1";
 const SESSION_KEY = "collabhub_mock_session";
 const BACKEND_SESSION_KEY = "collabhub_backend_session";
+const BACKEND_TOKEN_KEY = "collabhub_backend_access_token";
 
 const createId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
@@ -142,7 +143,25 @@ const normalizeBackendProjectForClient = (project) => {
 const useBackend = (import.meta.env.VITE_USE_BACKEND ?? "true") === "true";
 const backendClient = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api",
-  withCredentials: true,
+  withCredentials: false,
+});
+
+const getBackendToken = () => sessionStorage.getItem(BACKEND_TOKEN_KEY);
+const setBackendToken = (token) => {
+  if (!token) {
+    sessionStorage.removeItem(BACKEND_TOKEN_KEY);
+    return;
+  }
+  sessionStorage.setItem(BACKEND_TOKEN_KEY, token);
+};
+
+backendClient.interceptors.request.use((config) => {
+  const token = getBackendToken();
+  if (token) {
+    config.headers = config.headers || {};
+    config.headers.Authorization = `Bearer ${token}`;
+  }
+  return config;
 });
 
 const unwrapApiData = (response) => {
@@ -512,14 +531,18 @@ const backendAuthAPI = {
     };
 
     const res = await backendClient.post("/auth/register", payload);
-    localStorage.setItem(BACKEND_SESSION_KEY, "1");
+    localStorage.removeItem(BACKEND_SESSION_KEY);
+    sessionStorage.setItem(BACKEND_SESSION_KEY, "1");
     const content = unwrapApiData(res) || {};
+    setBackendToken(content.accessToken || "");
     return { data: { user: content.user || content, message: res.data?.message } };
   },
   login: async (data) => {
     const res = await backendClient.post("/auth/login", data);
-    localStorage.setItem(BACKEND_SESSION_KEY, "1");
+    localStorage.removeItem(BACKEND_SESSION_KEY);
+    sessionStorage.setItem(BACKEND_SESSION_KEY, "1");
     const content = unwrapApiData(res) || {};
+    setBackendToken(content.accessToken || "");
     return { data: { user: content.user || content } };
   },
   logout: async () => {
@@ -529,10 +552,12 @@ const backendAuthAPI = {
       if (err?.response?.status !== 401) throw err;
     }
     localStorage.removeItem(BACKEND_SESSION_KEY);
+    sessionStorage.removeItem(BACKEND_SESSION_KEY);
+    setBackendToken("");
     return { data: { success: true } };
   },
   me: async () => {
-    if (!localStorage.getItem(BACKEND_SESSION_KEY)) {
+    if (!sessionStorage.getItem(BACKEND_SESSION_KEY) || !getBackendToken()) {
       return Promise.reject({ response: { status: 401, data: { message: "Not authenticated" } } });
     }
     const res = await backendClient.get("/auth/profile");
@@ -540,8 +565,16 @@ const backendAuthAPI = {
     return { data: { user } };
   },
   updateProfile: async (data) => mockAuthAPI.updateProfile(data),
-  getUsers: async () => mockAuthAPI.getUsers(),
-  getUserById: async (id) => mockAuthAPI.getUserById(id),
+  getUsers: async () => {
+    const res = await backendClient.get("/auth/users");
+    const content = unwrapApiData(res) || {};
+    return { data: { users: content.users || [] } };
+  },
+  getUserById: async (id) => {
+    const res = await backendClient.get(`/auth/users/${id}`);
+    const content = unwrapApiData(res) || {};
+    return { data: { user: content.user || null } };
+  },
 };
 
 const backendAiAPI = {
@@ -662,7 +695,10 @@ export const projectAPI = {
   respondJoin: (id, userid, action) => runBackendWithFallback(() => backendProjectAPI.respondJoin(id, userid, action), () => mockProjectAPI.respondJoin(id, userid, action)),
   getMyProjects: () => runBackendWithFallback(() => backendProjectAPI.getMyProjects(), () => mockProjectAPI.getMyProjects()),
   removeMember: (projectId, userId) => runBackendWithFallback(() => backendProjectAPI.removeMember(projectId, userId), () => mockProjectAPI.removeMember(projectId, userId)),
-  inviteMember: (projectId, userId) => runBackendWithFallback(() => backendProjectAPI.inviteMember(projectId, userId), () => mockProjectAPI.inviteMember(projectId, userId)),
+  inviteMember: (projectId, userId) => {
+    if (useBackend) return backendProjectAPI.inviteMember(projectId, userId);
+    return mockProjectAPI.inviteMember(projectId, userId);
+  },
   respondInvite: (projectId, action) => runBackendWithFallback(() => backendProjectAPI.respondInvite(projectId, action), () => mockProjectAPI.respondInvite(projectId, action)),
 };
 

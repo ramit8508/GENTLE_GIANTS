@@ -7,7 +7,22 @@ async function matchTeammatesController(req, res) {
     }
     try {
         const result = await matchTeammates(project, users)
-        res.status(200).json({ result })
+        const validIds = new Set(users.map((u) => String(u?._id || u?.id)).filter(Boolean))
+        const normalized = (Array.isArray(result) ? result : [])
+            .map((rec) => ({ ...rec, id: String(rec?.id || "") }))
+            .filter((rec) => validIds.has(rec.id))
+
+        if (normalized.length > 0) {
+            return res.status(200).json({ result: normalized })
+        }
+
+        const fallback = users.slice(0, 4).map((u) => ({
+            id: String(u?._id || u?.id),
+            name: u?.name || "Unknown",
+            reason: "Recommended based on available profile data.",
+            percentage: 0,
+        }))
+        return res.status(200).json({ result: fallback })
     } catch (error) {
         console.error("Match Teammates Error:", error)
         res.status(500).json({ error: error.message })

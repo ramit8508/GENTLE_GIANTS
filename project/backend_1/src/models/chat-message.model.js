@@ -27,8 +27,6 @@ const chatMessageSchema = new mongoose.Schema(
     },
     { timestamps: true }
 )
-
 chatMessageSchema.index({ roomId: 1, createdAt: -1 })
-
 const chatMessageModel = mongoose.model("ChatMessage", chatMessageSchema)
 module.exports = chatMessageModel

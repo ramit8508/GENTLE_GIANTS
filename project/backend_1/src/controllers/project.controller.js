@@ -2,6 +2,7 @@ const projectModel=require("../models/project.model")
 const userModel=require("../models/user.model")
 const ApiError=require("../utils/api-error")
 const ApiResponse=require("../utils/api-response")
+const { createNotification } = require("./notification.controller");
 
 const createProject=async(req,res)=>{
     try {
@@ -129,6 +130,15 @@ const requestToJoinProject=async(req,res)=>{
         }
         project.join_requests.push({ user: req.user._id })
         await project.save()
+        
+        await createNotification({
+            recipient: project.createdBy,
+            sender: req.user._id,
+            project: project._id,
+            type: "join_request",
+            message: `A user has requested to join your project "${project.title}"`
+        });
+
         return res.status(200).json(new ApiResponse(200,"Request sent to project creator",project))
     }
     catch(error){
@@ -157,6 +167,17 @@ const respondJoin=async(req,res)=>{
                     throw new ApiError(400,"Invalid action. Use 'accept' or 'reject'")
                 }
                 await project.save()
+                
+                await createNotification({
+                    recipient: userid,
+                    sender: req.user._id,
+                    project: project._id,
+                    type: action === "accept" ? "request_accepted" : "request_rejected",
+                    message: action === "accept" 
+                        ? `Your request to join "${project.title}" has been accepted` 
+                        : `Your request to join "${project.title}" was declined`
+                });
+
                 return res.status(200).json(new ApiResponse(200,"Request responded successfully",project))
             } catch (error) {
                 throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while responding to the request")
@@ -243,6 +264,15 @@ const removeMember=async(req,res)=>{
     if(!project){
       throw new ApiError(404,"Project not found")
     }
+
+    await createNotification({
+        recipient: userId,
+        sender: req.user._id,
+        project: project._id,
+        type: "member_removed",
+        message: `You have been removed from the project "${project.title}"`
+    });
+
     return res.status(200).json(new ApiResponse(200,"Member removed successfully",project))
   }catch(error){
     throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while removing the member")
@@ -260,6 +290,15 @@ const inviteMember=async(req, res)=> {
         if (alreadyInvited) return res.status(400).json({ message: "User is already invited" });
         project.invitations.push({ user: userId });
         await project.save();
+
+        await createNotification({
+            recipient: userId,
+            sender: req.user._id,
+            project: project._id,
+            type: "invitation",
+            message: `You have been invited to join "${project.title}"`
+        });
+
         return res.status(200).json(new ApiResponse(200,"Invitation sent successfully",project));
     } catch (error) {
         throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while inviting the member")
@@ -285,6 +324,17 @@ const respondToInvitation=async(req,res)=>{
             return res.status(400).json({ message: "Invalid action" });
         }
         await project.save();
+
+        await createNotification({
+            recipient: project.createdBy,
+            sender: req.user._id,
+            project: project._id,
+            type: action === "accept" ? "invitation_accepted" : "invitation_rejected",
+            message: action === "accept" 
+                ? `A user accepted your invitation to "${project.title}"` 
+                : `A user declined your invitation to "${project.title}"`
+        });
+
         return res.status(200).json(new ApiResponse(200,"Invitation responded successfully",project));
     } catch (error) {
         throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while responding to the invitation")

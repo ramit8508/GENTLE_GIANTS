@@ -7,8 +7,10 @@ const callLogModel = require("../models/call-log.model")
 
 const rooms = new Map()
 const activeCalls = new Map()
+const roomBoards = new Map()
 
 const MAX_MESSAGES_PER_ROOM = 50
+const MAX_STROKES_PER_ROOM = 5000
 const MAX_CALL_PARTICIPANTS = Number(process.env.MAX_CALL_PARTICIPANTS || 8)
 const CALL_TYPES = new Set(["voice", "video"])
 
@@ -42,6 +44,13 @@ const getRoomSockets = (roomId) => {
         rooms.set(roomId, new Set())
     }
     return rooms.get(roomId)
+}
+
+const getRoomBoard = (roomId) => {
+    if (!roomBoards.has(roomId)) {
+        roomBoards.set(roomId, [])
+    }
+    return roomBoards.get(roomId)
 }
 
 const getSessionParticipantPayload = (session) => {
@@ -199,6 +208,7 @@ const leaveRoom = (ws) => {
         roomSockets.delete(ws)
         if (roomSockets.size === 0) {
             rooms.delete(roomId)
+            roomBoards.delete(roomId)
         }
     }
 
@@ -244,6 +254,11 @@ const joinRoom = async (ws, roomId) => {
         return
     }
 
+    const existingRoomSockets = rooms.get(roomId)
+    if (ws.roomId === roomId && existingRoomSockets?.has(ws)) {
+        return
+    }
+
     if (ws.roomId && ws.roomId !== roomId) {
         await removeParticipantFromCall(ws, "room_change")
         leaveRoom(ws)
@@ -258,6 +273,12 @@ const joinRoom = async (ws, roomId) => {
         type: "history",
         roomId,
         messages: history
+    })
+
+    sendJson(ws, {
+        type: "draw:sync",
+        roomId,
+        actions: getRoomBoard(roomId)
     })
 
     broadcastToRoom(roomId, {
@@ -490,7 +511,16 @@ const setupChatWebSocket = (server) => {
 
                     if (data.type === "draw:stroke") {
                         const roomId = data.roomId || ws.roomId
-                        if (!roomId || ws.roomId !== roomId) {
+                        if (!roomId) {
+                            sendJson(ws, { type: "error", message: "roomId is required for drawing" })
+                            return
+                        }
+
+                        if (ws.roomId !== roomId) {
+                            await joinRoom(ws, roomId)
+                        }
+
+                        if (ws.roomId !== roomId) {
                             sendJson(ws, { type: "error", message: "Join room before drawing" })
                             return
                         }
@@ -500,6 +530,20 @@ const setupChatWebSocket = (server) => {
                         if (!from || !to) {
                             sendJson(ws, { type: "error", message: "Draw stroke requires from/to points" })
                             return
+                        }
+
+                        const board = getRoomBoard(roomId)
+                        board.push({
+                            from,
+                            to,
+                            color: data.color,
+                            size: data.size,
+                            tool: data.tool,
+                            fromUserId: ws.user.id,
+                            ts: Date.now()
+                        })
+                        if (board.length > MAX_STROKES_PER_ROOM) {
+                            board.splice(0, board.length - MAX_STROKES_PER_ROOM)
                         }
 
                         broadcastToRoomExceptUser(roomId, ws.user.id, {
@@ -517,10 +561,21 @@ const setupChatWebSocket = (server) => {
 
                     if (data.type === "draw:clear") {
                         const roomId = data.roomId || ws.roomId
-                        if (!roomId || ws.roomId !== roomId) {
+                        if (!roomId) {
+                            sendJson(ws, { type: "error", message: "roomId is required to clear board" })
+                            return
+                        }
+
+                        if (ws.roomId !== roomId) {
+                            await joinRoom(ws, roomId)
+                        }
+
+                        if (ws.roomId !== roomId) {
                             sendJson(ws, { type: "error", message: "Join room before clearing board" })
                             return
                         }
+
+                        roomBoards.set(roomId, [])
 
                         broadcastToRoom(roomId, {
                             type: "draw:clear",

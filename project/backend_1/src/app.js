@@ -14,6 +14,8 @@ const projectRoutes=require("./routes/project.route")
 app.use("/api/project",projectRoutes)
 const aiRoutes=require("./routes/ai.route")
 app.use("/api/ai",aiRoutes)
+const notificationRoutes=require("./routes/notification.route")
+app.use("/api/notifications",notificationRoutes)
 app.use((err,req,res,next)=>{
     const statusCode=err.statusCode || 500
     const message=err.message || "Internal Server Error"

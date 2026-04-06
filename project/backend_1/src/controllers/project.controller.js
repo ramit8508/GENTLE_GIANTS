@@ -1,8 +1,29 @@
 const projectModel=require("../models/project.model")
 const userModel=require("../models/user.model")
+const notificationModel=require("../models/notification.model")
 const mongoose=require("mongoose")
 const ApiError=require("../utils/api-error")
 const ApiResponse=require("../utils/api-response")
+
+const createNotificationSafe = async ({ recipient, actor, project, type, title, message, metadata = {} }) => {
+    if (!recipient || !actor || String(recipient) === String(actor)) {
+        return
+    }
+
+    try {
+        await notificationModel.create({
+            recipient,
+            actor,
+            project: project || null,
+            type,
+            title,
+            message,
+            metadata
+        })
+    } catch (error) {
+        console.error("Notification creation failed", error.message)
+    }
+}
 
 const createProject=async(req,res)=>{
     try {
@@ -138,6 +159,18 @@ const requestToJoinProject=async(req,res)=>{
         }
         project.join_requests.push({ user: req.user._id })
         await project.save()
+        await createNotificationSafe({
+            recipient: project.createdBy,
+            actor: req.user._id,
+            project: project._id,
+            type: "join_request",
+            title: "New join request",
+            message: `${req.user.name} requested to join \"${project.title}\"`,
+            metadata: {
+                requesterId: req.user._id,
+                projectId: project._id
+            }
+        })
         return res.status(200).json(new ApiResponse(200,"Request sent to project creator",project))
     }
     catch(error){
@@ -166,6 +199,24 @@ const respondJoin=async(req,res)=>{
                     throw new ApiError(400,"Invalid action. Use 'accept' or 'reject'")
                 }
                 await project.save()
+                const shouldNotifyRequester = request.user && String(request.user) !== String(req.user._id)
+                if (shouldNotifyRequester) {
+                    await createNotificationSafe({
+                        recipient: request.user,
+                        actor: req.user._id,
+                        project: project._id,
+                        type: action === "accept" ? "join_request_accepted" : "join_request_rejected",
+                        title: action === "accept" ? "Join request accepted" : "Join request rejected",
+                        message:
+                            action === "accept"
+                                ? `Your request to join \"${project.title}\" was accepted`
+                                : `Your request to join \"${project.title}\" was rejected`,
+                        metadata: {
+                            projectId: project._id,
+                            action
+                        }
+                    })
+                }
                 return res.status(200).json(new ApiResponse(200,"Request responded successfully",project))
             } catch (error) {
                 throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while responding to the request")
@@ -249,6 +300,17 @@ const removeMember=async(req,res)=>{
       project.removed_members.push({ user: userId })
     }
     await project.save()
+        await createNotificationSafe({
+            recipient: userId,
+            actor: req.user._id,
+            project: project._id,
+            type: "removed_from_project",
+            title: "Removed from project",
+            message: `You have been removed from \"${project.title}\"`,
+            metadata: {
+                projectId: project._id
+            }
+        })
     if(!project){
       throw new ApiError(404,"Project not found")
     }
@@ -298,6 +360,17 @@ const inviteMember=async(req, res)=> {
         }
         project.invitations.push({ user: userId });
         await project.save();
+        await createNotificationSafe({
+            recipient: userId,
+            actor: req.user._id,
+            project: project._id,
+            type: "invite_received",
+            title: "Project invitation",
+            message: `You were invited to join \"${project.title}\"`,
+            metadata: {
+                projectId: project._id
+            }
+        })
         return res.status(200).json(new ApiResponse(200,"Invitation sent successfully",project));
     } catch (error) {
         throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while inviting the member")
@@ -323,6 +396,21 @@ const respondToInvitation=async(req,res)=>{
             return res.status(400).json({ message: "Invalid action" });
         }
         await project.save();
+        await createNotificationSafe({
+            recipient: project.createdBy,
+            actor: req.user._id,
+            project: project._id,
+            type: action === "accept" ? "invite_accepted" : "invite_rejected",
+            title: action === "accept" ? "Invitation accepted" : "Invitation rejected",
+            message:
+                action === "accept"
+                    ? `${req.user.name} accepted your invitation for \"${project.title}\"`
+                    : `${req.user.name} rejected your invitation for \"${project.title}\"`,
+            metadata: {
+                projectId: project._id,
+                action
+            }
+        })
         return res.status(200).json(new ApiResponse(200,"Invitation responded successfully",project));
     } catch (error) {
         throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while responding to the invitation")

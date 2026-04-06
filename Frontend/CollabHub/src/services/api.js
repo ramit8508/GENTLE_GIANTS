@@ -40,6 +40,7 @@ const defaultSeed = () => {
   return {
     users: [demoUser],
     projects: [demoProject],
+    notifications: [],
   };
 };
 
@@ -51,7 +52,11 @@ const readStore = () => {
     return seed;
   }
   try {
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw);
+    parsed.users = Array.isArray(parsed.users) ? parsed.users : [];
+    parsed.projects = Array.isArray(parsed.projects) ? parsed.projects : [];
+    parsed.notifications = Array.isArray(parsed.notifications) ? parsed.notifications : [];
+    return parsed;
   } catch {
     const seed = defaultSeed();
     localStorage.setItem(STORAGE_KEY, JSON.stringify(seed));
@@ -138,6 +143,47 @@ const normalizeBackendProjectForClient = (project) => {
     })),
     removed: (project.removed || project.removed_members || []).map((r) => String(r.user || r)),
   };
+};
+
+const normalizeNotificationForClient = (notification) => {
+  if (!notification) return null;
+
+  return {
+    _id: notification._id,
+    type: notification.type,
+    title: notification.title,
+    message: notification.message,
+    isRead: Boolean(notification.isRead),
+    createdAt: notification.createdAt,
+    actor: notification.actor
+      ? {
+          _id: notification.actor._id || notification.actor.id,
+          name: notification.actor.name || "Unknown",
+          email: notification.actor.email || "",
+        }
+      : null,
+    project: notification.project
+      ? {
+          _id: notification.project._id || notification.project.id,
+          title: notification.project.title || "Project",
+        }
+      : null,
+  };
+};
+
+const pushMockNotification = (store, payload) => {
+  store.notifications = Array.isArray(store.notifications) ? store.notifications : [];
+  store.notifications.unshift({
+    _id: createId(),
+    recipientId: String(payload.recipientId),
+    actor: payload.actor || null,
+    project: payload.project || null,
+    type: payload.type || "general",
+    title: payload.title || "Notification",
+    message: payload.message || "",
+    isRead: false,
+    createdAt: getNowISO(),
+  });
 };
 
 const useBackend = (import.meta.env.VITE_USE_BACKEND ?? "true") === "true";
@@ -418,6 +464,14 @@ const mockProjectAPI = {
 
     project.join_requests = project.join_requests || [];
     project.join_requests.push({ user: { _id: user._id, name: user.name }, status: "pending" });
+    pushMockNotification(store, {
+      recipientId: project.created_by?._id,
+      actor: { _id: user._id, name: user.name, email: user.email },
+      project: { _id: project._id, title: project.title },
+      type: "join_request",
+      title: "New join request",
+      message: `${user.name} requested to join \"${project.title}\"`,
+    });
     writeStore(store);
     return ok({ message: "Join request sent" });
   },
@@ -440,6 +494,17 @@ const mockProjectAPI = {
         project.members.push({ user: { _id: req.user?._id || userid, name: req.user?.name || "Member" }, role: "Member" });
       }
     }
+    pushMockNotification(store, {
+      recipientId: userid,
+      actor: { _id: userId, name: "Project Owner" },
+      project: { _id: project._id, title: project.title },
+      type: action === "accept" ? "join_request_accepted" : "join_request_rejected",
+      title: action === "accept" ? "Join request accepted" : "Join request rejected",
+      message:
+        action === "accept"
+          ? `Your request to join \"${project.title}\" was accepted`
+          : `Your request to join \"${project.title}\" was rejected`,
+    });
     writeStore(store);
     return ok({ success: true });
   },
@@ -476,6 +541,14 @@ const mockProjectAPI = {
     if (!project.removed.some((r) => String(r) === String(userId))) {
       project.removed.push(userId);
     }
+    pushMockNotification(store, {
+      recipientId: userId,
+      actor: { _id: currentUserId, name: "Project Owner" },
+      project: { _id: project._id, title: project.title },
+      type: "removed_from_project",
+      title: "Removed from project",
+      message: `You have been removed from \"${project.title}\"`,
+    });
     writeStore(store);
     return ok({ success: true });
   },
@@ -492,6 +565,14 @@ const mockProjectAPI = {
     const existing = project.invitations.find((i) => String(i.userId) === String(userId));
     if (existing && existing.status === "pending") return error(400, "Invite already sent");
     project.invitations.push({ userId, status: "pending" });
+    pushMockNotification(store, {
+      recipientId: userId,
+      actor: { _id: currentUserId, name: "Project Owner" },
+      project: { _id: project._id, title: project.title },
+      type: "invite_received",
+      title: "Project invitation",
+      message: `You were invited to join \"${project.title}\"`,
+    });
     writeStore(store);
     return ok({ message: "Invite sent" });
   },
@@ -514,6 +595,61 @@ const mockProjectAPI = {
         }
       }
     }
+    pushMockNotification(store, {
+      recipientId: project.created_by?._id,
+      actor: { _id: currentUserId, name: "Member" },
+      project: { _id: project._id, title: project.title },
+      type: action === "accept" ? "invite_accepted" : "invite_rejected",
+      title: action === "accept" ? "Invitation accepted" : "Invitation rejected",
+      message: action === "accept" ? "Your project invitation was accepted" : "Your project invitation was rejected",
+    });
+    writeStore(store);
+    return ok({ success: true });
+  },
+};
+
+const mockNotificationAPI = {
+  getAll: async () => {
+    const store = readStore();
+    const userId = getSessionUserId();
+    if (!userId) return error(401, "Login required");
+
+    const notifications = (store.notifications || [])
+      .filter((item) => String(item.recipientId) === String(userId))
+      .map((item) =>
+        normalizeNotificationForClient({
+          ...item,
+          actor: item.actor || null,
+          project: item.project || null,
+        })
+      );
+
+    return ok({ notifications, unreadCount: notifications.filter((item) => !item.isRead).length });
+  },
+  markAsRead: async (notificationId) => {
+    const store = readStore();
+    const userId = getSessionUserId();
+    if (!userId) return error(401, "Login required");
+
+    const notification = (store.notifications || []).find((item) => String(item._id) === String(notificationId));
+    if (!notification || String(notification.recipientId) !== String(userId)) {
+      return error(404, "Notification not found");
+    }
+    notification.isRead = true;
+    writeStore(store);
+    return ok({ success: true });
+  },
+  markAllAsRead: async () => {
+    const store = readStore();
+    const userId = getSessionUserId();
+    if (!userId) return error(401, "Login required");
+
+    (store.notifications || []).forEach((item) => {
+      if (String(item.recipientId) === String(userId)) {
+        item.isRead = true;
+      }
+    });
+
     writeStore(store);
     return ok({ success: true });
   },
@@ -668,6 +804,27 @@ const backendProjectAPI = {
   },
 };
 
+const backendNotificationAPI = {
+  getAll: async () => {
+    const res = await backendClient.get("/notifications");
+    const data = unwrapApiData(res) || {};
+    return {
+      data: {
+        notifications: (data.notifications || []).map(normalizeNotificationForClient),
+        unreadCount: Number(data.unreadCount || 0),
+      },
+    };
+  },
+  markAsRead: async (notificationId) => {
+    await backendClient.patch(`/notifications/${notificationId}/read`);
+    return { data: { success: true } };
+  },
+  markAllAsRead: async () => {
+    await backendClient.patch("/notifications/read-all");
+    return { data: { success: true } };
+  },
+};
+
 export const authAPI = {
   register: (data) => runBackendWithFallback(() => backendAuthAPI.register(data), () => mockAuthAPI.register(data)),
   login: (data) => runBackendWithFallback(() => backendAuthAPI.login(data), () => mockAuthAPI.login(data)),
@@ -700,6 +857,12 @@ export const projectAPI = {
     return mockProjectAPI.inviteMember(projectId, userId);
   },
   respondInvite: (projectId, action) => runBackendWithFallback(() => backendProjectAPI.respondInvite(projectId, action), () => mockProjectAPI.respondInvite(projectId, action)),
+};
+
+export const notificationAPI = {
+  getAll: () => runBackendWithFallback(() => backendNotificationAPI.getAll(), () => mockNotificationAPI.getAll()),
+  markAsRead: (notificationId) => runBackendWithFallback(() => backendNotificationAPI.markAsRead(notificationId), () => mockNotificationAPI.markAsRead(notificationId)),
+  markAllAsRead: () => runBackendWithFallback(() => backendNotificationAPI.markAllAsRead(), () => mockNotificationAPI.markAllAsRead()),
 };
 
 if (useBackend) {

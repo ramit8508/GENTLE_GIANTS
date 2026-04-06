@@ -131,6 +131,29 @@ export default function CollaborationRoom() {
     };
   };
 
+  const toRelativePoint = (point) => {
+    const canvas = drawCanvasRef.current;
+    if (!canvas || !point) return point;
+    return {
+      x: canvas.width ? point.x / canvas.width : 0,
+      y: canvas.height ? point.y / canvas.height : 0,
+    };
+  };
+
+  const fromRelativePoint = (point) => {
+    const canvas = drawCanvasRef.current;
+    if (!canvas || !point) return point;
+
+    if (point.x > 1 || point.y > 1) {
+      return point;
+    }
+
+    return {
+      x: point.x * canvas.width,
+      y: point.y * canvas.height,
+    };
+  };
+
   const syncCanvasSize = () => {
     const canvas = drawCanvasRef.current;
     if (!canvas) return;
@@ -199,9 +222,12 @@ export default function CollaborationRoom() {
     const ctx = drawCtxRef.current;
     if (!ctx || !from || !to) return;
 
+    const fromPx = fromRelativePoint(from);
+    const toPx = fromRelativePoint(to);
+
     ctx.beginPath();
-    ctx.moveTo(from.x, from.y);
-    ctx.lineTo(to.x, to.y);
+    ctx.moveTo(fromPx.x, fromPx.y);
+    ctx.lineTo(toPx.x, toPx.y);
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     ctx.lineWidth = Number(size) || 4;
@@ -439,6 +465,23 @@ export default function CollaborationRoom() {
       return;
     }
 
+    if (data.type === "draw:sync") {
+      const actions = Array.isArray(data.actions) ? data.actions : [];
+      drawActionsRef.current = actions.map((action) => ({
+        from: action.from,
+        to: action.to,
+        color: action.color,
+        size: action.size,
+        tool: action.tool,
+      }));
+
+      if (drawOpen) {
+        clearDrawCanvas(false);
+        drawActionsRef.current.forEach((stroke) => applyDrawStroke(stroke));
+      }
+      return;
+    }
+
     if (data.type === "draw:clear") {
       drawActionsRef.current = [];
       if (drawOpen) {
@@ -474,6 +517,7 @@ export default function CollaborationRoom() {
 
       socket.onopen = () => {
         setConnectionState("Connected");
+        sendWs({ type: "join", roomId: id });
       };
 
       socket.onmessage = async (event) => {

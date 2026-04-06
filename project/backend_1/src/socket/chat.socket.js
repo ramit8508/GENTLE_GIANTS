@@ -2,9 +2,9 @@ const { WebSocketServer } = require("ws")
 const jwt = require("jsonwebtoken")
 const mongoose = require("mongoose")
 const projectModel = require("../models/project.model")
+const chatMessageModel = require("../models/chat-message.model")
 
 const rooms = new Map()
-const messageHistory = new Map()
 
 const MAX_MESSAGES_PER_ROOM = 50
 
@@ -40,15 +40,25 @@ const getRoomSockets = (roomId) => {
     return rooms.get(roomId)
 }
 
-const addToHistory = (roomId, message) => {
-    if (!messageHistory.has(roomId)) {
-        messageHistory.set(roomId, [])
-    }
-    const history = messageHistory.get(roomId)
-    history.push(message)
-    if (history.length > MAX_MESSAGES_PER_ROOM) {
-        history.shift()
-    }
+const getRoomHistory = async (roomId) => {
+    const docs = await chatMessageModel
+        .find({ roomId })
+        .sort({ createdAt: -1 })
+        .limit(MAX_MESSAGES_PER_ROOM)
+        .lean()
+
+    return docs
+        .reverse()
+        .map((doc) => ({
+            id: doc._id.toString(),
+            roomId: doc.roomId.toString(),
+            content: doc.content,
+            sender: {
+                id: doc.senderId.toString(),
+                name: doc.senderName
+            },
+            createdAt: doc.createdAt
+        }))
 }
 
 const broadcastToRoom = (roomId, payload) => {
@@ -101,7 +111,7 @@ const joinRoom = async (ws, roomId) => {
     const roomSockets = getRoomSockets(roomId)
     roomSockets.add(ws)
 
-    const history = messageHistory.get(roomId) || []
+    const history = await getRoomHistory(roomId)
     sendJson(ws, {
         type: "history",
         roomId,
@@ -173,18 +183,24 @@ const setupChatWebSocket = (server) => {
                             return
                         }
 
-                        const message = {
-                            id: new mongoose.Types.ObjectId().toString(),
+                        const savedMessage = await chatMessageModel.create({
                             roomId: ws.roomId,
-                            content,
+                            senderId: ws.user.id,
+                            senderName: ws.user.name,
+                            content
+                        })
+
+                        const message = {
+                            id: savedMessage._id.toString(),
+                            roomId: ws.roomId,
+                            content: savedMessage.content,
                             sender: {
-                                id: ws.user.id,
-                                name: ws.user.name
+                                id: savedMessage.senderId.toString(),
+                                name: savedMessage.senderName
                             },
-                            createdAt: new Date().toISOString()
+                            createdAt: savedMessage.createdAt
                         }
 
-                        addToHistory(ws.roomId, message)
                         broadcastToRoom(ws.roomId, {
                             type: "new_message",
                             roomId: ws.roomId,

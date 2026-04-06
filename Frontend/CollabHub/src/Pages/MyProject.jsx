@@ -148,6 +148,16 @@ export default function MyProjects() {
                 </button>
               </div>
 
+              <div style={{ marginTop: '12px' }}>
+                <Link
+                  to={`/project/${project._id}/collaboration`}
+                  state={{ projectTitle: project.title, owner: project.created_by }}
+                  className="btn btn-primary btn-sm"
+                >
+                  Open Collaboration Room
+                </Link>
+              </div>
+
               {/* Members */}
               <div className="project-section">
                 <h4>Team Members</h4>
@@ -258,7 +268,11 @@ export default function MyProjects() {
                 ))}
               </div>
               <div style={{ marginTop: '14px' }}>
-                <Link to={`/project/${project._id}/collaboration`} className="btn btn-primary btn-sm">
+                <Link
+                  to={`/project/${project._id}/collaboration`}
+                  state={{ projectTitle: project.title, owner: project.created_by }}
+                  className="btn btn-primary btn-sm"
+                >
                   Open Collaboration Room
                 </Link>
               </div>

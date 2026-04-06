@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../Context/AuthContext";
 
 const seedMessages = [
@@ -21,6 +21,7 @@ const seedMessages = [
 
 export default function CollaborationRoom() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { id } = useParams();
   const { user } = useAuth();
 
@@ -30,8 +31,45 @@ export default function CollaborationRoom() {
   const [isMuted, setIsMuted] = useState(false);
   const [cameraOff, setCameraOff] = useState(false);
   const [screenShared, setScreenShared] = useState(false);
+  const [activeChatTab, setActiveChatTab] = useState("live");
+  const [contactHint, setContactHint] = useState("");
 
-  const roomTitle = useMemo(() => `Project Collaboration #${id}`, [id]);
+  const roomTitle = useMemo(() => {
+    if (location.state?.projectTitle) {
+      return `Project Collaboration: ${location.state.projectTitle}`;
+    }
+    return `Project Collaboration #${id}`;
+  }, [id, location.state]);
+
+  const ownerName = location.state?.owner?.name || "Project Owner";
+  const ownerEmail = location.state?.owner?.email || "";
+
+  const historyByDay = useMemo(() => {
+    const today = messages.map((m) => ({ ...m, dateLabel: "Today" }));
+    const earlier = [
+      {
+        id: "old-1",
+        sender: ownerName,
+        mine: false,
+        text: "Please review the wireframe concept and propose improvements.",
+        time: "18:35",
+        dateLabel: "Yesterday",
+      },
+      {
+        id: "old-2",
+        sender: user?.name || "You",
+        mine: true,
+        text: "Looks good. I will share a refined interaction map tomorrow.",
+        time: "18:42",
+        dateLabel: "Yesterday",
+      },
+    ];
+    return [...earlier, ...today].reduce((acc, item) => {
+      acc[item.dateLabel] = acc[item.dateLabel] || [];
+      acc[item.dateLabel].push(item);
+      return acc;
+    }, {});
+  }, [messages, ownerName, user?.name]);
 
   const sendMessage = (e) => {
     e.preventDefault();
@@ -53,6 +91,22 @@ export default function CollaborationRoom() {
     setDraft("");
   };
 
+  const sendMail = (subject, body) => {
+    if (!ownerEmail) {
+      setContactHint("Collaborator email will be supplied by backend profile data.");
+      return;
+    }
+    window.location.href = `mailto:${ownerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+  };
+
+  const handleCallUser = () => {
+    sendMail(
+      `Call request for ${roomTitle}`,
+      `Hi ${ownerName},\n\nCan we jump on a quick project call? I am in the collaboration room and ready to discuss tasks.\n\nThanks.`
+    );
+    setContactHint("Call request draft opened in your email client.");
+  };
+
   return (
     <div className="page collaboration-page">
       <section className="collab-shell">
@@ -69,6 +123,33 @@ export default function CollaborationRoom() {
             <span className="status-chip">2 Participants</span>
           </div>
         </header>
+
+        <section className="collab-contact-card">
+          <div>
+            <h3>Collaborator Contact</h3>
+            <p>
+              Connected with <strong>{ownerName}</strong>
+              {ownerEmail ? ` (${ownerEmail})` : " (email pending backend data)"}.
+            </p>
+          </div>
+          <div className="collab-contact-actions">
+            <button className="btn btn-outline btn-sm" onClick={handleCallUser}>
+              Call User (Send Mail)
+            </button>
+            <button
+              className="btn btn-outline btn-sm"
+              onClick={() =>
+                sendMail(
+                  `Message from ${roomTitle}`,
+                  `Hi ${ownerName},\n\nSharing project collaboration update from the room.\n\nRegards.`
+                )
+              }
+            >
+              Email User
+            </button>
+          </div>
+          {contactHint && <div className="collab-contact-hint">{contactHint}</div>}
+        </section>
 
         <div className={`collab-main ${drawOpen ? "draw-open" : ""}`}>
           <section className="call-stage">
@@ -125,31 +206,71 @@ export default function CollaborationRoom() {
 
           <aside className="chat-panel">
             <div className="chat-header">
-              <h3>Team Chat</h3>
-              <span>{messages.length} messages</span>
+              <div>
+                <h3>Team Chat</h3>
+                <span>{messages.length} messages</span>
+              </div>
+              <div className="chat-tabs">
+                <button
+                  className={`chat-tab-btn ${activeChatTab === "live" ? "active" : ""}`}
+                  onClick={() => setActiveChatTab("live")}
+                  type="button"
+                >
+                  Live
+                </button>
+                <button
+                  className={`chat-tab-btn ${activeChatTab === "history" ? "active" : ""}`}
+                  onClick={() => setActiveChatTab("history")}
+                  type="button"
+                >
+                  History
+                </button>
+              </div>
             </div>
 
-            <div className="chat-log">
-              {messages.map((msg) => (
-                <article key={msg.id} className={`chat-bubble ${msg.mine ? "mine" : ""}`}>
-                  <strong>{msg.sender}</strong>
-                  <p>{msg.text}</p>
-                  <small>{msg.time}</small>
-                </article>
-              ))}
-            </div>
+            {activeChatTab === "live" ? (
+              <>
+                <div className="chat-log">
+                  {messages.map((msg) => (
+                    <article key={msg.id} className={`chat-bubble ${msg.mine ? "mine" : ""}`}>
+                      <strong>{msg.sender}</strong>
+                      <p>{msg.text}</p>
+                      <small>{msg.time}</small>
+                    </article>
+                  ))}
+                </div>
 
-            <form className="chat-composer" onSubmit={sendMessage}>
-              <input
-                type="text"
-                value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                placeholder="Type message for your teammate..."
-              />
-              <button className="btn btn-primary" type="submit">
-                Send
-              </button>
-            </form>
+                <form className="chat-composer" onSubmit={sendMessage}>
+                  <input
+                    type="text"
+                    value={draft}
+                    onChange={(e) => setDraft(e.target.value)}
+                    placeholder="Type message for your teammate..."
+                  />
+                  <button className="btn btn-primary" type="submit">
+                    Send
+                  </button>
+                </form>
+              </>
+            ) : (
+              <div className="chat-history">
+                <p className="history-note">History view is UI-ready. Backend can provide persisted records.</p>
+                {Object.entries(historyByDay).map(([day, entries]) => (
+                  <section key={day} className="history-day-group">
+                    <h4>{day}</h4>
+                    {entries.map((entry) => (
+                      <article key={entry.id} className="history-row">
+                        <div>
+                          <strong>{entry.sender}</strong>
+                          <p>{entry.text}</p>
+                        </div>
+                        <small>{entry.time}</small>
+                      </article>
+                    ))}
+                  </section>
+                ))}
+              </div>
+            )}
           </aside>
         </div>
       </section>

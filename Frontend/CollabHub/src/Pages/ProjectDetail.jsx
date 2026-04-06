@@ -1,4 +1,4 @@
-import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../Context/AuthContext';
 import { projectAPI } from '../services/api';
 import { useState, useEffect } from 'react';
@@ -81,6 +81,24 @@ export default function ProjectDetail() {
     }
   };
 
+  const sendEmail = (subject, body) => {
+    const ownerEmail = project?.created_by?.email;
+    if (!ownerEmail) {
+      setMessage('Owner email is not available yet. Backend can attach verified contact details.');
+      return;
+    }
+    const link = `mailto:${ownerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+    window.location.href = link;
+  };
+
+  const handleRequestCall = () => {
+    sendEmail(
+      `Call request for project: ${project?.title || 'CollabHub project'}`,
+      `Hi ${project?.created_by?.name || 'there'},%0D%0A%0D%0AI want to discuss collaboration details for your project.%0D%0A%0D%0AThanks.`
+    );
+    setMessage('Call request draft opened in your email client.');
+  };
+
   return (
     <div className="page">
       <div className="detail-page">
@@ -144,6 +162,28 @@ export default function ProjectDetail() {
           {message && (
             <div className={`alert ${message.includes('lacking') || message.includes('already') || message.includes('failed') ? 'alert-error' : 'alert-success'}`}>
               {message}
+            </div>
+          )}
+
+          {isLoggedIn && !isCreator && (
+            <div className="detail-section" style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', marginTop: '16px' }}>
+              <h4>Contact Project Owner</h4>
+              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
+                <button className="btn btn-outline btn-sm" onClick={handleRequestCall}>
+                  Call User (Send Mail)
+                </button>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={() =>
+                    sendEmail(
+                      `Collaboration query: ${project?.title || 'Project'}`,
+                      `Hi ${project?.created_by?.name || 'there'},%0D%0A%0D%0AI would like to connect regarding your project collaboration.%0D%0A%0D%0AThanks.`
+                    )
+                  }
+                >
+                  Email User
+                </button>
+              </div>
             </div>
           )}
 
@@ -231,9 +271,21 @@ export default function ProjectDetail() {
           )}
 
           {isLoggedIn && isCreator && (
-            <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', marginTop: '16px' }}>
-              This is your project. Manage it from <a href="/my-projects">My Projects</a>.
-            </p>
+            <div style={{ marginTop: '16px', display: 'grid', gap: '10px' }}>
+              <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                This is your project. Manage it from <a href="/my-projects">My Projects</a>.
+              </p>
+              <button
+                className="btn btn-primary"
+                onClick={() =>
+                  navigate(`/project/${project._id}/collaboration`, {
+                    state: { projectTitle: project.title, owner: project.created_by },
+                  })
+                }
+              >
+                Open Collaboration Room
+              </button>
+            </div>
           )}
 
           {isLoggedIn && isMember && !isCreator && (
@@ -241,7 +293,14 @@ export default function ProjectDetail() {
               <div className="alert alert-success" style={{ marginBottom: 0 }}>
                 You are already a member of this project
               </div>
-              <button className="btn btn-primary" onClick={() => navigate(`/project/${project._id}/collaboration`)}>
+              <button
+                className="btn btn-primary"
+                onClick={() =>
+                  navigate(`/project/${project._id}/collaboration`, {
+                    state: { projectTitle: project.title, owner: project.created_by },
+                  })
+                }
+              >
                 Open Collaboration Room
               </button>
             </div>

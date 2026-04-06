@@ -17,8 +17,12 @@ const createProject=async(req,res)=>{
             roles_needed,
             createdBy:req.user._id
         })
-        const createdProject=await projectModel.findById(project._id).select("-createdAt -updatedAt " )
-        return res.status(201).json(new ApiResponse(201,"Project created successfully",createdProject))
+        const createdProject=await projectModel
+            .findById(project._id)
+            .select("-createdAt -updatedAt")
+            .populate("createdBy", "name email")
+            .populate("members.user", "name email")
+        return res.status(201).json(new ApiResponse(201, createdProject, "Project created successfully"))
     }
     catch (error) {
         throw new ApiError(500,"Something went wrong while creating a project",error.message)
@@ -26,12 +30,16 @@ const createProject=async(req,res)=>{
 }
 const getAllProjects=async(req,res)=>{
     try {
-        const projects=await projectModel.find().select("-createdAt -updatedAt")
+        const projects=await projectModel
+            .find()
+            .select("-createdAt -updatedAt")
+            .populate("createdBy", "name email")
+            .populate("members.user", "name email")
         if(!projects)
         {
             throw new ApiError(404,"No projects found")
         }
-        return res.status(200).json(new ApiResponse(200,"Projects fetched successfully",projects))
+        return res.status(200).json(new ApiResponse(200, projects, "Projects fetched successfully"))
     }
     catch (error) {
         throw new ApiError(500,"Something went wrong while fetching projects",error.message)
@@ -65,14 +73,14 @@ const searchProject=async(req,res)=>{
         if (Object.keys(query).length === 0) 
         {
             const projects = await projectModel.find()
-                .populate("createdBy", "name")
-                .populate("members.user", "name");
-            return res.status(200).json(new ApiResponse(200,"Projects fetched successfully",projects));
+                .populate("createdBy", "name email")
+                .populate("members.user", "name email");
+            return res.status(200).json(new ApiResponse(200, projects, "Projects fetched successfully"));
         }
         const projects = await projectModel.find(query)
-            .populate("createdBy", "name")
-            .populate("members.user", "name");
-        return res.status(200).json(new ApiResponse(200,"Projects fetched successfully",projects))
+            .populate("createdBy", "name email")
+            .populate("members.user", "name email");
+        return res.status(200).json(new ApiResponse(200, projects, "Projects fetched successfully"))
     } catch (error) {
         throw new ApiError(500,"Something went wrong while fetching projects",error.message)
     }
@@ -168,13 +176,13 @@ const getMyProjects=async(req,res)=>{
         const createdProjects = await projectModel
         .find({ createdBy:userId })
         .select("title tech_stack roles_needed createdBy members join_requests")
-        .populate("createdBy","name")
-        .populate("members.user","name")
-        .populate("join_requests.user","name")
+        .populate("createdBy","name email")
+        .populate("members.user","name email")
+        .populate("join_requests.user","name email")
         const joinedProjects = await projectModel
         .find({ "members.user":userId })
         .select("title tech_stack roles_needed createdBy")
-        .populate("createdBy","name")
+        .populate("createdBy","name email")
         const pendingRequests = await projectModel
         .find({
             created_by:{ $ne:userId },
@@ -186,11 +194,11 @@ const getMyProjects=async(req,res)=>{
             }
         })
         .select("title tech_stack roles_needed created_by")
-        .populate("createdBy","name")
+        .populate("createdBy","name email")
         const removedFromProjects = await projectModel
         .find({ "removed_members.user":userId })
         .select("title tech_stack roles_needed created_by")
-        .populate("createdBy","name")
+        .populate("createdBy","name email")
         const pendingInvitations = await projectModel
         .find({
             invitations:{
@@ -201,14 +209,14 @@ const getMyProjects=async(req,res)=>{
             }
         })
         .select("title tech_stack roles_needed created_by")
-        .populate("createdBy","name")
-        return res.status(200).json(new ApiResponse(200,"Your projects fetched successfully",{
+        .populate("createdBy","name email")
+        return res.status(200).json(new ApiResponse(200, {
             createdProjects,
             joinedProjects,
             pendingRequests,
             removedFromProjects,
             pendingInvitations
-        }))
+        }, "Your projects fetched successfully"))
     } catch (error) {
         throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while fetching your projects")
     }
@@ -216,13 +224,13 @@ const getMyProjects=async(req,res)=>{
 const getProjectById=async(req,res)=>{
     try {
         const project = await projectModel.findById(req.params.id)
-            .populate("createdBy","name")
-            .populate("members.user","name")
-            .populate("join_requests.user","name")
+            .populate("createdBy","name email")
+            .populate("members.user","name email")
+            .populate("join_requests.user","name email")
         if(!project){
             throw new ApiError(404,"Project not found")
         }
-        return res.status(200).json(new ApiResponse(200,"Project fetched successfully",project))
+        return res.status(200).json(new ApiResponse(200, project, "Project fetched successfully"))
     } catch(error){
         throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while fetching the project")
     }

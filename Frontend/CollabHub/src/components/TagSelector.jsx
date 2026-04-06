@@ -11,6 +11,11 @@ export default function TagSelector({ label, options, selectedTags, onChange, pl
     }
   };
 
+  const handleSelectFromDropdown = (tag) => {
+    handleToggleTag(tag);
+    setIsOpen(false);
+  };
+
   return (
     <div style={{ position: 'relative' }}>
       <label style={{ fontSize: '0.9rem', fontWeight: 600, display: 'block', marginBottom: '8px' }}>
@@ -83,25 +88,35 @@ export default function TagSelector({ label, options, selectedTags, onChange, pl
           {options.map(option => (
             <div
               key={option}
-              onClick={() => handleToggleTag(option)}
+              onClick={() => handleSelectFromDropdown(option)}
               style={{
                 padding: '10px 12px',
                 cursor: 'pointer',
-                background: selectedTags.includes(option) ? 'var(--accent-light)' : 'transparent',
+                background: selectedTags.includes(option) ? 'rgba(196, 92, 38, 0.12)' : 'transparent',
                 borderBottom: '1px solid var(--border)',
                 fontSize: '0.9rem',
                 display: 'flex',
                 alignItems: 'center',
-                gap: '8px'
+                justifyContent: 'flex-start',
+                gap: '10px',
+                textAlign: 'left'
               }}
             >
               <input
                 type="checkbox"
                 checked={selectedTags.includes(option)}
                 readOnly
-                style={{ cursor: 'pointer' }}
+                style={{
+                  cursor: 'pointer',
+                  width: 'auto',
+                  minWidth: '16px',
+                  height: '16px',
+                  margin: 0,
+                  padding: 0,
+                  flex: '0 0 auto'
+                }}
               />
-              {option}
+              <span style={{ lineHeight: 1.2 }}>{option}</span>
             </div>
           ))}
         </div>

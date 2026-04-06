@@ -2,6 +2,7 @@ import axios from "axios";
 
 const STORAGE_KEY = "collabhub_mock_storage_v1";
 const SESSION_KEY = "collabhub_mock_session";
+const BACKEND_SESSION_KEY = "collabhub_backend_session";
 
 const createId = () => `${Date.now()}_${Math.random().toString(16).slice(2)}`;
 
@@ -150,6 +151,24 @@ const unwrapApiData = (response) => {
     return payload.data;
   }
   return payload;
+};
+
+const unwrapBackendPayload = (response) => {
+  const payload = response?.data;
+  if (!payload || typeof payload !== "object") return payload;
+
+  // Preferred shape: { data: ... }
+  if ("data" in payload && payload.data !== undefined && payload.data !== null && typeof payload.data !== "string") {
+    return payload.data;
+  }
+
+  // Current backend project controllers often send ApiResponse args in wrong order,
+  // producing: { data: "message", message: <actual object/array> }
+  if ("message" in payload && payload.message !== undefined && payload.message !== null && typeof payload.message !== "string") {
+    return payload.message;
+  }
+
+  return payload.data ?? payload.message ?? payload;
 };
 
 const isFallbackCandidate = (err) => {
@@ -496,19 +515,25 @@ const backendAuthAPI = {
     };
 
     const res = await backendClient.post("/auth/register", payload);
+    localStorage.removeItem(BACKEND_SESSION_KEY);
     const content = unwrapApiData(res) || {};
     return { data: { user: content.user || content, requiresEmailVerification: true, message: res.data?.message } };
   },
   login: async (data) => {
     const res = await backendClient.post("/auth/login", data);
+    localStorage.setItem(BACKEND_SESSION_KEY, "1");
     const content = unwrapApiData(res) || {};
     return { data: { user: content.user || content } };
   },
   logout: async () => {
     await backendClient.post("/auth/logout");
+    localStorage.removeItem(BACKEND_SESSION_KEY);
     return { data: { success: true } };
   },
   me: async () => {
+    if (!localStorage.getItem(BACKEND_SESSION_KEY)) {
+      return Promise.reject({ response: { status: 401, data: { message: "Not authenticated" } } });
+    }
     const res = await backendClient.get("/auth/profile");
     const user = unwrapApiData(res);
     return { data: { user } };
@@ -545,17 +570,19 @@ const backendProjectAPI = {
   },
   getAll: async () => {
     const res = await backendClient.get("/project/");
-    const projects = (unwrapApiData(res) || []).map(normalizeBackendProjectForClient);
+    const rawProjects = unwrapBackendPayload(res);
+    const projects = (Array.isArray(rawProjects) ? rawProjects : []).map(normalizeBackendProjectForClient);
     return { data: { projects } };
   },
   getById: async (id) => {
     const res = await backendClient.get(`/project/${id}`);
-    return { data: { project: normalizeBackendProjectForClient(unwrapApiData(res)) } };
+    return { data: { project: normalizeBackendProjectForClient(unwrapBackendPayload(res)) } };
   },
   search: async (params) => {
     const query = typeof params === "string" ? { q: params } : params || {};
     const res = await backendClient.get("/project/search", { params: query });
-    const projects = (unwrapApiData(res) || []).map(normalizeBackendProjectForClient);
+    const rawProjects = unwrapBackendPayload(res);
+    const projects = (Array.isArray(rawProjects) ? rawProjects : []).map(normalizeBackendProjectForClient);
     return { data: { projects } };
   },
   update: async (id, data) => {
@@ -582,7 +609,7 @@ const backendProjectAPI = {
   },
   getMyProjects: async () => {
     const res = await backendClient.get("/project/my-projects");
-    const data = unwrapApiData(res) || {};
+    const data = unwrapBackendPayload(res) || {};
     return {
       data: {
         createdProjects: (data.createdProjects || []).map(normalizeBackendProjectForClient),

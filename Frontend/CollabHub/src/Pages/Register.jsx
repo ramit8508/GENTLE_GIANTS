@@ -202,7 +202,7 @@ export default function Register() {
             </div>
 
             <div className="form-group">
-              <label htmlFor="github">GitHub Profile <span className="label-optional">(optional)</span></label>
+              <label htmlFor="github">GitHub Profile</label>
               <input
                 id="github"
                 type="url"

@@ -60,7 +60,7 @@ const registerUser=async(req,res)=>{
     }
     catch(error)
     {
-        throw new ApiError(500, error?.message || "Something went wrong")
+        throw new ApiError(error?.statusCode || 500, error?.message || "Something went wrong")
     }
 }
 
@@ -124,14 +124,13 @@ const loginUser=async(req,res)=>{
         }
         const {accessToken,refreshToken}=await generateAccessandRefreshToken(user._id)
         const loggedInUser=await userModel.findById(user._id).select("-password -refreshToken")
-        res.cookie("accessToken",accessToken,{
+        const cookieOptions={
             httpOnly:true,
-            secure:true
-        })
-        res.cookie("refreshToken",refreshToken,{
-            httpOnly:true,
-            secure:true
-        })
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
+        }
+        res.cookie("accessToken",accessToken,cookieOptions)
+        res.cookie("refreshToken",refreshToken,cookieOptions)
         return res.status(200).json(new ApiResponse(200, { user: loggedInUser}, "User logged in successfully"))
     }
     catch(error)
@@ -143,7 +142,11 @@ const loginUser=async(req,res)=>{
 const logoutUser=async(req,res)=>{
     try {
         await userModel.findByIdAndUpdate(req.user._id, { $set: { refreshToken: "" } })
-        const options = { httpOnly: true, secure: true }
+        const options = {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: process.env.NODE_ENV === "production" ? "none" : "lax"
+        }
         return res
             .status(200)
             .clearCookie("accessToken", options)

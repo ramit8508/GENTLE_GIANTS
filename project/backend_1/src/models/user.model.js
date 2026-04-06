@@ -108,6 +108,19 @@ userSchema.methods.generateRefreshToken=function(){
     }
   )
 }
+userSchema.methods.generateTemporaryToken=function()
+{
+    const unhashedToken=crypto
+    .randomBytes(32)
+    .toString("hex")
+    const hashedToken=crypto
+    .createHash("sha256")
+    .update(unhashedToken)
+    .digest("hex")
+    const tokenExpiry=Date.now()+(20*60*1000) //20 mins
+
+    return {unhashedToken,hashedToken,tokenExpiry}
+}
 
 const User=mongoose.model("User",userSchema)
 module.exports=User

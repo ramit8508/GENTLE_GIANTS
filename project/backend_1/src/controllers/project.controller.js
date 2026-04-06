@@ -227,7 +227,69 @@ const getProjectById=async(req,res)=>{
         throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while fetching the project")
     }
 }
+const removeMember=async(req,res)=>{
+  try{
+    const { id } = req.params
+    const { userId } = req.body
+    const project = await projectModel.findById(id)
+    if(!project){
+      throw new ApiError(404,"Project not found")
+    }
+    project.members = project.members.filter(m => m.user.toString() !== userId)
+    if (!project.removed_members.some(m => m.user.toString() === userId)) {
+      project.removed_members.push({ user: userId })
+    }
+    await project.save()
+    if(!project){
+      throw new ApiError(404,"Project not found")
+    }
+    return res.status(200).json(new ApiResponse(200,"Member removed successfully",project))
+  }catch(error){
+    throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while removing the member")
+  }
+}
+const inviteMember=async(req, res)=> {
+    try {
+        const { id } = req.params; // project id
+        const { userId } = req.body;
+        const project = await projectModel.findById(id);
+        if (!project) return res.status(404).json({ message: "Project not found" });
+        const isMember = project.members.some(m => m.user.toString() === userId);
+        if (isMember) return res.status(400).json({ message: "User is already a member" });
+        const alreadyInvited = project.invitations.some(i => i.user.toString() === userId && i.status === "pending");
+        if (alreadyInvited) return res.status(400).json({ message: "User is already invited" });
+        project.invitations.push({ user: userId });
+        await project.save();
+        return res.status(200).json(new ApiResponse(200,"Invitation sent successfully",project));
+    } catch (error) {
+        throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while inviting the member")
+    }
+}
+const respondToInvitation=async(req,res)=>{
+    try {
+        const { id } = req.params;
+        const { action, role } = req.body;
+        const userId = req.user._id.toString();
+        const project = await projectModel.findById(id);
+        if (!project) return res.status(404).json({ message: "Project not found" });
+        const invitation = project.invitations.find(i => i.user.toString() === userId && i.status === "pending");
+        if (!invitation) return res.status(404).json({ message: "Pending invitation not found" });
+        if (action === "accept") {
+            invitation.status = "accepted";
+            const validRoles=["frontend","backend","fullstack","ui/ux","project_manager","other"]
+            const memberRole = validRoles.includes(role) ? role : "other"
+            project.members.push({ user: userId, role: memberRole });
+        } else if (action === "reject") {
+            invitation.status = "rejected";
+        } else {
+            return res.status(400).json({ message: "Invalid action" });
+        }
+        await project.save();
+        return res.status(200).json(new ApiResponse(200,"Invitation responded successfully",project));
+    } catch (error) {
+        throw new ApiError(error.statusCode || 500, error.message || "Something went wrong while responding to the invitation")
+    }
+}
 
 
-
-module.exports={createProject,getAllProjects,searchProject,updateProject,deleteProject,requestToJoinProject,respondJoin,getMyProjects,getProjectById}
+module.exports={createProject,getAllProjects,searchProject,updateProject,deleteProject,requestToJoinProject,respondJoin,getMyProjects,getProjectById,removeMember,inviteMember,respondToInvitation}

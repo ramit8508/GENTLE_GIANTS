@@ -12,4 +12,7 @@ router.route("/request/:id").post(authmiddleware,projectControllers.requestToJoi
 router.route("/respond/:id").post(authmiddleware,projectOwner,projectControllers.respondJoin)
 router.route("/my-projects").get(authmiddleware,projectControllers.getMyProjects)
 router.route("/:id").get(projectControllers.getProjectById)
+router.route("/remove-member/:id").post(authmiddleware,projectOwner,projectControllers.removeMember)
+router.route("/invite/:id").post(authmiddleware,projectOwner,projectControllers.inviteMember)
+router.route("/respond-invitation/:id").post(authmiddleware,projectControllers.respondToInvitation)
 module.exports=router

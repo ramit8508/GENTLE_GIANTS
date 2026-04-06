@@ -3,10 +3,14 @@ const jwt = require("jsonwebtoken")
 const mongoose = require("mongoose")
 const projectModel = require("../models/project.model")
 const chatMessageModel = require("../models/chat-message.model")
+const callLogModel = require("../models/call-log.model")
 
 const rooms = new Map()
+const activeCalls = new Map()
 
 const MAX_MESSAGES_PER_ROOM = 50
+const MAX_CALL_PARTICIPANTS = Number(process.env.MAX_CALL_PARTICIPANTS || 8)
+const CALL_TYPES = new Set(["voice", "video"])
 
 const sendJson = (ws, payload) => {
     if (ws.readyState === 1) {
@@ -38,6 +42,122 @@ const getRoomSockets = (roomId) => {
         rooms.set(roomId, new Set())
     }
     return rooms.get(roomId)
+}
+
+const getSessionParticipantPayload = (session) => {
+    return Array.from(session.participants.values()).map((participant) => ({
+        userId: participant.userId,
+        name: participant.name,
+        joinedAt: participant.joinedAt,
+        isMuted: participant.isMuted,
+        isVideoEnabled: participant.isVideoEnabled
+    }))
+}
+
+const getActiveCallSession = (roomId) => activeCalls.get(roomId) || null
+
+const getOrCreateCallSession = (roomId, callType, initiatedBy) => {
+    let session = activeCalls.get(roomId)
+    if (!session) {
+        session = {
+            roomId,
+            callType,
+            initiatedBy,
+            startedAt: new Date(),
+            participants: new Map(),
+            hasPersisted: false
+        }
+        activeCalls.set(roomId, session)
+    }
+    return session
+}
+
+const sendToUserInRoom = (roomId, userId, payload) => {
+    const roomSockets = rooms.get(roomId)
+    if (!roomSockets) return
+
+    roomSockets.forEach((client) => {
+        if (client.user?.id === userId) {
+            sendJson(client, payload)
+        }
+    })
+}
+
+const broadcastToRoomExceptUser = (roomId, excludedUserId, payload) => {
+    const roomSockets = rooms.get(roomId)
+    if (!roomSockets) return
+
+    roomSockets.forEach((client) => {
+        if (client.user?.id !== excludedUserId) {
+            sendJson(client, payload)
+        }
+    })
+}
+
+const persistEndedCallSession = async (session, endReason) => {
+    if (!session || session.hasPersisted) return
+
+    const endedAt = new Date()
+    const durationSeconds = Math.max(
+        0,
+        Math.floor((endedAt.getTime() - session.startedAt.getTime()) / 1000)
+    )
+
+    const participants = Array.from(session.participants.values()).map((participant) => ({
+        userId: participant.userId,
+        name: participant.name,
+        joinedAt: participant.joinedAt,
+        leftAt: participant.leftAt || endedAt
+    }))
+
+    await callLogModel.create({
+        roomId: session.roomId,
+        initiatedBy: session.initiatedBy,
+        callType: session.callType,
+        participants,
+        startedAt: session.startedAt,
+        endedAt,
+        durationSeconds,
+        endReason
+    })
+
+    session.hasPersisted = true
+}
+
+const removeParticipantFromCall = async (ws, reason) => {
+    const roomId = ws.roomId
+    if (!roomId) return
+
+    const session = activeCalls.get(roomId)
+    if (!session) return
+
+    const participant = session.participants.get(ws.user.id)
+    if (!participant) return
+
+    participant.leftAt = new Date()
+    session.participants.set(ws.user.id, participant)
+
+    broadcastToRoom(roomId, {
+        type: "call:participant_left",
+        roomId,
+        userId: ws.user.id,
+        name: ws.user.name,
+        reason
+    })
+
+    if (session.participants.size <= 1) {
+        await persistEndedCallSession(session, "all_left")
+        activeCalls.delete(roomId)
+        broadcastToRoom(roomId, {
+            type: "call:ended",
+            roomId,
+            reason: "all_left"
+        })
+        return
+    }
+
+    session.participants.delete(ws.user.id)
+    activeCalls.set(roomId, session)
 }
 
 const getRoomHistory = async (roomId) => {
@@ -87,15 +207,28 @@ const leaveRoom = (ws) => {
 
 const validateProjectRoom = async (roomId) => {
     if (!mongoose.Types.ObjectId.isValid(roomId)) {
-        return false
+        return null
     }
-    const exists = await projectModel.exists({ _id: roomId })
-    return Boolean(exists)
+    return projectModel
+        .findById(roomId)
+        .select("_id createdBy members.user")
+        .lean()
+}
+
+const isUserAllowedInProject = (project, userId) => {
+    if (!project) return false
+
+    const uid = String(userId)
+    if (String(project.createdBy) === uid) {
+        return true
+    }
+
+    return (project.members || []).some((member) => String(member.user) === uid)
 }
 
 const joinRoom = async (ws, roomId) => {
-    const isValidRoom = await validateProjectRoom(roomId)
-    if (!isValidRoom) {
+    const project = await validateProjectRoom(roomId)
+    if (!project) {
         sendJson(ws, {
             type: "error",
             message: "Invalid roomId. It must be an existing project id."
@@ -103,7 +236,16 @@ const joinRoom = async (ws, roomId) => {
         return
     }
 
+    if (!isUserAllowedInProject(project, ws.user.id)) {
+        sendJson(ws, {
+            type: "error",
+            message: "You are not authorized to join this room."
+        })
+        return
+    }
+
     if (ws.roomId && ws.roomId !== roomId) {
+        await removeParticipantFromCall(ws, "room_change")
         leaveRoom(ws)
     }
 
@@ -143,6 +285,7 @@ const setupChatWebSocket = (server) => {
                 id: decoded._id,
                 name: decoded.name || "Anonymous"
             }
+            ws.connectionId = new mongoose.Types.ObjectId().toString()
             ws.roomId = null
 
             sendJson(ws, {
@@ -151,7 +294,9 @@ const setupChatWebSocket = (server) => {
                 usage: {
                     path: "/ws/chat",
                     join: { type: "join", roomId: "<projectId>" },
-                    send: { type: "send_message", content: "Hello" }
+                    send: { type: "send_message", content: "Hello" },
+                    callJoin: { type: "call:join", roomId: "<projectId>", callType: "video" },
+                    callSignal: { type: "call:offer", roomId: "<projectId>", targetUserId: "<userId>", sdp: {} }
                 }
             })
 
@@ -209,14 +354,149 @@ const setupChatWebSocket = (server) => {
                         return
                     }
 
+                    if (data.type === "call:join") {
+                        const roomId = data.roomId || ws.roomId
+                        const callType = CALL_TYPES.has(data.callType) ? data.callType : "video"
+
+                        if (!roomId) {
+                            sendJson(ws, { type: "error", message: "roomId is required to join a call" })
+                            return
+                        }
+
+                        if (ws.roomId !== roomId) {
+                            await joinRoom(ws, roomId)
+                        }
+
+                        if (ws.roomId !== roomId) {
+                            return
+                        }
+
+                        const session = getOrCreateCallSession(roomId, callType, ws.user.id)
+
+                        if (!session.participants.has(ws.user.id) && session.participants.size >= MAX_CALL_PARTICIPANTS) {
+                            sendJson(ws, { type: "error", message: "Call participant limit reached" })
+                            return
+                        }
+
+                        const previous = session.participants.get(ws.user.id)
+                        session.participants.set(ws.user.id, {
+                            userId: ws.user.id,
+                            name: ws.user.name,
+                            joinedAt: previous?.joinedAt || new Date(),
+                            leftAt: null,
+                            isMuted: previous?.isMuted || false,
+                            isVideoEnabled: previous?.isVideoEnabled ?? callType === "video"
+                        })
+
+                        activeCalls.set(roomId, session)
+
+                        sendJson(ws, {
+                            type: "call:joined",
+                            roomId,
+                            callType: session.callType,
+                            participants: getSessionParticipantPayload(session)
+                        })
+
+                        broadcastToRoomExceptUser(roomId, ws.user.id, {
+                            type: "call:participant_joined",
+                            roomId,
+                            userId: ws.user.id,
+                            name: ws.user.name
+                        })
+                        return
+                    }
+
+                    if (data.type === "call:offer" || data.type === "call:answer" || data.type === "call:ice-candidate") {
+                        const roomId = data.roomId || ws.roomId
+                        if (!roomId) {
+                            sendJson(ws, { type: "error", message: "roomId is required for call signaling" })
+                            return
+                        }
+
+                        const session = getActiveCallSession(roomId)
+                        if (!session || !session.participants.has(ws.user.id)) {
+                            sendJson(ws, { type: "error", message: "Join the call before signaling" })
+                            return
+                        }
+
+                        const payload = {
+                            type: data.type,
+                            roomId,
+                            fromUserId: ws.user.id,
+                            fromUserName: ws.user.name,
+                            sdp: data.sdp,
+                            candidate: data.candidate
+                        }
+
+                        if (data.targetUserId) {
+                            sendToUserInRoom(roomId, data.targetUserId, payload)
+                        } else {
+                            broadcastToRoomExceptUser(roomId, ws.user.id, payload)
+                        }
+                        return
+                    }
+
+                    if (data.type === "call:mute-toggle" || data.type === "call:video-toggle") {
+                        const roomId = data.roomId || ws.roomId
+                        const session = getActiveCallSession(roomId)
+                        if (!session || !session.participants.has(ws.user.id)) {
+                            sendJson(ws, { type: "error", message: "Join the call before updating call state" })
+                            return
+                        }
+
+                        const participant = session.participants.get(ws.user.id)
+                        if (data.type === "call:mute-toggle") {
+                            participant.isMuted = Boolean(data.isMuted)
+                        } else {
+                            participant.isVideoEnabled = Boolean(data.isVideoEnabled)
+                        }
+                        session.participants.set(ws.user.id, participant)
+                        activeCalls.set(roomId, session)
+
+                        broadcastToRoom(roomId, {
+                            type: "call:participant_updated",
+                            roomId,
+                            userId: ws.user.id,
+                            isMuted: participant.isMuted,
+                            isVideoEnabled: participant.isVideoEnabled
+                        })
+                        return
+                    }
+
+                    if (data.type === "call:leave") {
+                        await removeParticipantFromCall(ws, "manual")
+                        return
+                    }
+
+                    if (data.type === "call:end") {
+                        const roomId = data.roomId || ws.roomId
+                        const session = getActiveCallSession(roomId)
+                        if (!session || !session.participants.has(ws.user.id)) {
+                            sendJson(ws, { type: "error", message: "No active call to end" })
+                            return
+                        }
+
+                        await persistEndedCallSession(session, "manual")
+                        activeCalls.delete(roomId)
+
+                        broadcastToRoom(roomId, {
+                            type: "call:ended",
+                            roomId,
+                            reason: "manual",
+                            endedBy: ws.user.id
+                        })
+                        return
+                    }
+
                     sendJson(ws, { type: "error", message: "Unknown event type" })
                 } catch (error) {
                     sendJson(ws, { type: "error", message: "Invalid message payload" })
                 }
             })
 
-            ws.on("close", () => {
+            ws.on("close", async () => {
                 const roomId = ws.roomId
+                await removeParticipantFromCall(ws, "disconnect")
                 leaveRoom(ws)
                 if (roomId) {
                     broadcastToRoom(roomId, {

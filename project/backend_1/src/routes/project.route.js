@@ -9,4 +9,6 @@ router.route("/search").get(projectControllers.searchProject)
 router.route("/update/:id").put(authmiddleware,projectOwner,projectControllers.updateProject)
 router.route("/delete/:id").delete(authmiddleware,projectOwner,projectControllers.deleteProject)
 router.route("/request/:id").post(authmiddleware,projectControllers.requestToJoinProject)
+router.route("/respond/:id").post(authmiddleware,projectOwner,projectControllers.respondJoin)
+router.route("/my-projects").get(authmiddleware,projectControllers.getMyProjects)
 module.exports=router

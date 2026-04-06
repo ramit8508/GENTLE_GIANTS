@@ -4,7 +4,6 @@ export const TECH_STACK_OPTIONS = [
   'AWS', 'Docker', 'Kubernetes', 'Firebase', 'GraphQL', 'Next.js', 'Vue.js',
   'Tailwind CSS', 'Figma', 'UI/UX Design', 'Product Management', 'Mobile Development',
   'React Native', 'Flutter', 'DevOps', 'Machine Learning', 'Data Science',
-  // New additions
   'Angular', 'Svelte', 'Redis', 'MySQL', 'SQLite', 'Prisma', 'Supabase',
   'Socket.io', 'WebSockets', 'REST API', 'FastAPI', 'OpenAI API', 'LangChain',
   'Hugging Face', 'TensorFlow', 'PyTorch', 'Scikit-learn', 'Pandas', 'NumPy',

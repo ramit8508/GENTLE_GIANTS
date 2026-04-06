@@ -14,6 +14,7 @@ import Profile from './Pages/Profile';
 import ProjectDetail from './Pages/ProjectDetail';
 import UserProfile from './Pages/UserProfile';
 import FAQ from './Pages/FAQ';
+import CollaborationRoom from './Pages/CollaborationRoom';
 
 export default function App() {
   return (
@@ -27,6 +28,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Home />} />
               <Route path="/project/:id" element={<ProjectDetail />} />
+              <Route path="/project/:id/collaboration" element={<ProtectedRoute><CollaborationRoom /></ProtectedRoute>} />
               <Route path="/user/:id" element={<UserProfile />} />
               <Route path="/login" element={<Login />} />
               <Route path="/register" element={<Register />} />

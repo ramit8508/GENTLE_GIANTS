@@ -237,8 +237,13 @@ export default function ProjectDetail() {
           )}
 
           {isLoggedIn && isMember && !isCreator && (
-            <div className="alert alert-success" style={{ marginTop: '16px' }}>
-              ✓ You are already a member of this project
+            <div style={{ marginTop: '16px', display: 'grid', gap: '10px' }}>
+              <div className="alert alert-success" style={{ marginBottom: 0 }}>
+                You are already a member of this project
+              </div>
+              <button className="btn btn-primary" onClick={() => navigate(`/project/${project._id}/collaboration`)}>
+                Open Collaboration Room
+              </button>
             </div>
           )}
 

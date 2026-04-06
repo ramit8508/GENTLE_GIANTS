@@ -257,6 +257,11 @@ export default function MyProjects() {
                   <span key={i} className="tag tag-role">{r}</span>
                 ))}
               </div>
+              <div style={{ marginTop: '14px' }}>
+                <Link to={`/project/${project._id}/collaboration`} className="btn btn-primary btn-sm">
+                  Open Collaboration Room
+                </Link>
+              </div>
             </div>
           ))}
         </div>

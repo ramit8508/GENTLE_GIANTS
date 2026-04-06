@@ -1,4 +1,7 @@
 const mongoose=require("mongoose")
+const jwt=require("jsonwebtoken")
+const bcrypt=require("bcrypt")
+const crypto=require("crypto")
 const userSchema=new mongoose.Schema({
   name:
   {
@@ -18,7 +21,7 @@ const userSchema=new mongoose.Schema({
   password:
   {
     type:String,
-    required:true,
+    required:[true,"Password is required"],
     trim:true,
     minlength:[8,"Password must be at least 8 characters long"],
     maxlength:[20,"Password must be at most 20 characters long"]
@@ -73,6 +76,14 @@ const userSchema=new mongoose.Schema({
     type:Date,
   }
 },{ timestamps:true})
+
+userSchema.pre("save",async function(){
+  if(!this.isModified("password")) return
+  this.password=await bcrypt.hash(this.password,10)
+})
+userSchema.methods.isPasswordCorrect=async function(password){
+  return await bcrypt.compare(password,this.password)
+}
 
 const User=mongoose.model("User",userSchema)
 module.exports=User

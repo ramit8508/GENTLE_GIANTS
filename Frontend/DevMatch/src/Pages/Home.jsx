@@ -10,6 +10,10 @@ export default function Home () {
     roles: []
   })
   const [isLoggedIn] = useState(false) // TODO: Replace with actual auth state
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
+  const [projects, setProjects] = useState([])
+  const [visibleCount, setVisibleCount] = useState(6)
 
   const handleSearch = e => {
     e.preventDefault()
@@ -224,6 +228,65 @@ export default function Home () {
             <p>Try a different keyword or filter.</p>
           </div>
         )}
+                <div className="projects-grid stagger-children">
+          {projects.slice(0, visibleCount).map((project) => (
+            <Link
+              key={project._id}
+              to={`/project/${project._id}`}
+              state={{ project }}
+              className="project-card fade-in"
+              style={{ textDecoration: 'none', color: 'inherit' }}
+            >
+              <div className="project-card-header">
+                <h3 className="project-title">{project.title}</h3>
+                <span className="project-author">
+                  by {project.created_by?.name || 'Unknown'}
+                </span>
+              </div>
+              {project.description && (
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                  {project.description.length > 120
+                    ? project.description.substring(0, 120) + '...'
+                    : project.description}
+                </p>
+              )}
+              
+              <div style={{ marginTop: 'auto', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {project.tech_stack?.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '45px' }}>Skills</span>
+                    <div className="project-tags">
+                      {project.tech_stack.slice(0, 3).map((t, i) => (
+                        <span key={`tech-${i}`} className="tag tag-tech">{t}</span>
+                      ))}
+                      {project.tech_stack.length > 3 && (
+                        <span className="tag" style={{ background: 'var(--bg-warm)', color: 'var(--text-muted)' }}>
+                          +{project.tech_stack.length - 3}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+                
+                {project.roles_needed?.length > 0 && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '45px' }}>Roles</span>
+                    <div className="project-tags">
+                      {project.roles_needed.slice(0, 2).map((role, i) => (
+                        <span key={`role-${i}`} className="tag tag-role">{role}</span>
+                      ))}
+                      {project.roles_needed.length > 2 && (
+                        <span className="tag" style={{ background: 'var(--bg-warm)', color: 'var(--text-muted)' }}>
+                          +{project.roles_needed.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </Link>
+          ))}
+        </div>
         </section>
       </div>
     </>

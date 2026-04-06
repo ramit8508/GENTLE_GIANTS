@@ -47,8 +47,11 @@ export default function CollaborationRoom() {
   const chatEndRef = useRef(null);
   const drawCanvasRef = useRef(null);
   const drawCtxRef = useRef(null);
+  const drawLocalVideoRef = useRef(null);
+  const drawRemoteVideoRef = useRef(null);
   const isDrawingRef = useRef(false);
   const lastPointRef = useRef(null);
+  const drawActionsRef = useRef([]);
   const localVideoRef = useRef(null);
   const remotePrimaryRef = useRef(null);
   const localStreamRef = useRef(null);
@@ -172,14 +175,17 @@ export default function CollaborationRoom() {
     const current = getCanvasPoint(event);
     const previous = lastPointRef.current || current;
 
-    ctx.beginPath();
-    ctx.moveTo(previous.x, previous.y);
-    ctx.lineTo(current.x, current.y);
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    ctx.lineWidth = Number(drawSize);
-    ctx.strokeStyle = drawTool === "eraser" ? "#ffffff" : drawColor;
-    ctx.stroke();
+    const stroke = {
+      from: previous,
+      to: current,
+      color: drawColor,
+      size: Number(drawSize),
+      tool: drawTool,
+    };
+
+    applyDrawStroke(stroke);
+    drawActionsRef.current.push(stroke);
+    sendWs({ type: "draw:stroke", roomId: id, ...stroke });
 
     lastPointRef.current = current;
   };
@@ -189,13 +195,31 @@ export default function CollaborationRoom() {
     lastPointRef.current = null;
   };
 
-  const clearDrawCanvas = () => {
+  const applyDrawStroke = ({ from, to, color, size, tool }) => {
+    const ctx = drawCtxRef.current;
+    if (!ctx || !from || !to) return;
+
+    ctx.beginPath();
+    ctx.moveTo(from.x, from.y);
+    ctx.lineTo(to.x, to.y);
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    ctx.lineWidth = Number(size) || 4;
+    ctx.strokeStyle = tool === "eraser" ? "#ffffff" : (color || "#2b2118");
+    ctx.stroke();
+  };
+
+  const clearDrawCanvas = (broadcast = true) => {
     const canvas = drawCanvasRef.current;
     const ctx = drawCtxRef.current;
     if (!canvas || !ctx) return;
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     ctx.fillStyle = "#fff";
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    drawActionsRef.current = [];
+    if (broadcast) {
+      sendWs({ type: "draw:clear", roomId: id });
+    }
   };
 
   const ensureLocalMedia = async () => {
@@ -240,7 +264,7 @@ export default function CollaborationRoom() {
     };
 
     pc.ontrack = (event) => {
-      const [streamTrack] = event.streams;
+      const streamTrack = event.streams?.[0] || new MediaStream([event.track]);
       if (!streamTrack) return;
       setRemoteStreams((prev) => {
         const next = prev.filter((entry) => String(entry.userId) !== String(targetUserId));
@@ -400,6 +424,35 @@ export default function CollaborationRoom() {
       return;
     }
 
+    if (data.type === "draw:stroke") {
+      const stroke = {
+        from: data.from,
+        to: data.to,
+        color: data.color,
+        size: data.size,
+        tool: data.tool,
+      };
+      drawActionsRef.current.push(stroke);
+      if (drawOpen) {
+        applyDrawStroke(stroke);
+      }
+      return;
+    }
+
+    if (data.type === "draw:clear") {
+      drawActionsRef.current = [];
+      if (drawOpen) {
+        const canvas = drawCanvasRef.current;
+        const ctx = drawCtxRef.current;
+        if (canvas && ctx) {
+          ctx.clearRect(0, 0, canvas.width, canvas.height);
+          ctx.fillStyle = "#fff";
+          ctx.fillRect(0, 0, canvas.width, canvas.height);
+        }
+      }
+      return;
+    }
+
     if (data.type === "call:ended") {
       appendSystemMessage("Call ended.");
       leaveCall("remote_end");
@@ -471,14 +524,30 @@ export default function CollaborationRoom() {
   useEffect(() => {
     if (remotePrimaryRef.current) {
       remotePrimaryRef.current.srcObject = remotePrimary?.stream || null;
+      if (remotePrimaryRef.current.srcObject) {
+        remotePrimaryRef.current.play().catch(() => {});
+      }
     }
-  }, [remotePrimary]);
+    if (drawRemoteVideoRef.current) {
+      drawRemoteVideoRef.current.srcObject = remotePrimary?.stream || null;
+      if (drawRemoteVideoRef.current.srcObject) {
+        drawRemoteVideoRef.current.play().catch(() => {});
+      }
+    }
+  }, [remotePrimary, drawOpen, inCall]);
 
   useEffect(() => {
-    if (localVideoRef.current && localStreamRef.current) {
-      localVideoRef.current.srcObject = localStreamRef.current;
+    if (localStreamRef.current) {
+      if (localVideoRef.current) {
+        localVideoRef.current.srcObject = localStreamRef.current;
+        localVideoRef.current.play().catch(() => {});
+      }
+      if (drawLocalVideoRef.current) {
+        drawLocalVideoRef.current.srcObject = localStreamRef.current;
+        drawLocalVideoRef.current.play().catch(() => {});
+      }
     }
-  }, [inCall]);
+  }, [inCall, drawOpen]);
 
   useEffect(() => {
     if (chatEndRef.current) {
@@ -491,7 +560,8 @@ export default function CollaborationRoom() {
 
     const init = () => {
       syncCanvasSize();
-      clearDrawCanvas();
+      clearDrawCanvas(false);
+      drawActionsRef.current.forEach((stroke) => applyDrawStroke(stroke));
     };
 
     init();
@@ -608,6 +678,23 @@ export default function CollaborationRoom() {
             </aside>
 
             <div className="draw-fullpage-canvas-wrap">
+              <div className="draw-top-strip">
+                <div className="draw-mini-video-card">
+                  <span>Teammate</span>
+                  {remotePrimary ? (
+                    <video ref={drawRemoteVideoRef} autoPlay playsInline className="draw-mini-video" />
+                  ) : (
+                    <div className="draw-mini-video draw-mini-placeholder">No remote video</div>
+                  )}
+                </div>
+                <div className="draw-mini-video-card">
+                  <span>You</span>
+                  <video ref={drawLocalVideoRef} autoPlay muted playsInline className="draw-mini-video" />
+                </div>
+                <button className="btn btn-sm draw-back-btn" onClick={() => setDrawOpen(false)}>
+                  Back to Full Screen
+                </button>
+              </div>
               <canvas
                 ref={drawCanvasRef}
                 className="draw-fullpage-canvas"

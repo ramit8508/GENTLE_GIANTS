@@ -488,6 +488,48 @@ const setupChatWebSocket = (server) => {
                         return
                     }
 
+                    if (data.type === "draw:stroke") {
+                        const roomId = data.roomId || ws.roomId
+                        if (!roomId || ws.roomId !== roomId) {
+                            sendJson(ws, { type: "error", message: "Join room before drawing" })
+                            return
+                        }
+
+                        const from = data.from
+                        const to = data.to
+                        if (!from || !to) {
+                            sendJson(ws, { type: "error", message: "Draw stroke requires from/to points" })
+                            return
+                        }
+
+                        broadcastToRoomExceptUser(roomId, ws.user.id, {
+                            type: "draw:stroke",
+                            roomId,
+                            fromUserId: ws.user.id,
+                            from,
+                            to,
+                            color: data.color,
+                            size: data.size,
+                            tool: data.tool
+                        })
+                        return
+                    }
+
+                    if (data.type === "draw:clear") {
+                        const roomId = data.roomId || ws.roomId
+                        if (!roomId || ws.roomId !== roomId) {
+                            sendJson(ws, { type: "error", message: "Join room before clearing board" })
+                            return
+                        }
+
+                        broadcastToRoom(roomId, {
+                            type: "draw:clear",
+                            roomId,
+                            fromUserId: ws.user.id
+                        })
+                        return
+                    }
+
                     sendJson(ws, { type: "error", message: "Unknown event type" })
                 } catch (error) {
                     sendJson(ws, { type: "error", message: "Invalid message payload" })

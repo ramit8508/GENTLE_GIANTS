@@ -1,45 +1,45 @@
-# [Web Development - Project 2]
+# [Web Development - Project 1]
 
 ## 🚀 Project Title  
-DevMatch 
+LiveCollab 
 
 ## 🧠 Problem Statement  
-Hackathon participants struggle to find teammates.
+Teams need lightweight collaboration tools.
 
 ## 🎯 Objective  
-Match users based on skills.
+Build realtime collaborative whiteboard.
 
 ## 👥 Target Users  
-Students
+Teams
 
 ## ⚙️ Core Features (MVP - achievable in 24 hours)
-- Profile
-- Matching
+- Drawing
+- Sync via websockets
 
 ## 🌟 Advanced Features (for top teams)
-- Chat
+- Voice chat
 
 ## 🔄 User Flow
-Create profile → match
+Join → draw → sync
 
 ## 🏗️ System Design Overview
-API + matching logic
+Client → WS server
 
 ## 🔌 API Design
-POST /user
-GET /match
+WS /connect
+POST /room
 
 ## 🗄️ Database Schema
-User
+Room
 
 ## ⚠️ Engineering Challenges
-Matching algo
+Sync conflicts
 
 ## 🧪 Edge Cases
-Sparse users
+Disconnects
 
 ## 🧰 Suggested Tech Stack
-Node
+Node + WS
 
 ## 📊 Evaluation Criteria
 - Innovation  
@@ -58,4 +58,4 @@ Node
 - Focus on MVP first  
 
 ## 💡 Bonus Ideas
-Skill scoring
+Undo/redo

@@ -1121,6 +1121,11 @@ a:hover { opacity: 0.72; }
   letter-spacing: -0.01em;
 }
 .collab-header p { color: var(--text-secondary); font-size: 0.92rem; }
+.collab-header-controls {
+  display: grid;
+  gap: 8px;
+  justify-items: end;
+}
 .collab-statuses { display: flex; gap: 8px; flex-wrap: wrap; }
 .status-chip {
   display: inline-flex;
@@ -1137,6 +1142,86 @@ a:hover { opacity: 0.72; }
   background: #eef5ef;
   border-color: #9ec4a4;
   color: var(--accent-green);
+}
+
+.todo-panel {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: #fff;
+  margin-bottom: 14px;
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.todo-panel-head h3 {
+  font-family: 'Outfit', sans-serif;
+  font-size: 1rem;
+  margin: 0;
+}
+.todo-panel-head p {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+}
+.todo-composer {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 8px;
+}
+.todo-composer input {
+  border: 1.5px solid var(--border-input);
+  border-radius: var(--radius-sm);
+  background: #fff;
+  padding: 9px 10px;
+  font-family: inherit;
+  color: var(--text);
+}
+.todo-list {
+  max-height: 220px;
+  overflow: auto;
+  display: grid;
+  gap: 8px;
+  padding-right: 2px;
+}
+.todo-item {
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-warm);
+  padding: 8px 10px;
+}
+.todo-item.done {
+  border-color: #9ec4a4;
+  background: #eef5ef;
+}
+.todo-main {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.todo-main input {
+  margin-top: 2px;
+}
+.todo-main span {
+  font-size: 0.86rem;
+  color: var(--text);
+}
+.todo-item.done .todo-main span {
+  text-decoration: line-through;
+  text-decoration-thickness: 1.5px;
+  color: #4e6654;
+}
+.todo-item small {
+  display: block;
+  margin-top: 5px;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+}
+.todo-empty {
+  border: 1px dashed var(--border);
+  background: var(--bg-warm);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  font-size: 0.78rem;
+  color: var(--text-muted);
 }
 
 .collab-main {
@@ -1577,6 +1662,7 @@ a:hover { opacity: 0.72; }
   .projects-grid    { grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
   .collab-main { grid-template-columns: 1fr; }
   .collab-main.draw-open { grid-template-columns: 1fr; }
+  .collab-header-controls { justify-items: start; }
   .draw-stage { grid-template-columns: 1fr; }
   .draw-fullpage { grid-template-columns: 1fr; min-height: 80vh; }
   .draw-fullpage-tools { border-right: none; border-bottom: 1px solid var(--border); }
@@ -1627,8 +1713,13 @@ a:hover { opacity: 0.72; }
   .footer-links      { width: 100%; justify-content: space-between; gap: 20px; }
   .collaboration-page  { padding: 12px; }
   .collab-shell        { padding: 14px; }
+  .collab-header       { flex-direction: column; }
+  .collab-header-controls { width: 100%; }
+  .collab-header-controls .btn { width: 100%; }
   .collab-header h1    { font-size: 1.35rem; }
   .call-stage, .chat-panel, .draw-stage { min-height: 360px; }
+  .todo-composer       { grid-template-columns: 1fr; }
+  .todo-composer .btn  { width: 100%; }
   .local-video         { width: 132px; height: 82px; right: 14px; }
   .chat-composer       { flex-direction: column; }
   .chat-composer .btn  { width: 100%; }

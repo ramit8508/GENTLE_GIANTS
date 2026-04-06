@@ -1,8 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { useAuth } from "../Context/AuthContext";
+import { io } from "socket.io-client";
 
 const WS_BASE = import.meta.env.VITE_WS_URL || "ws://localhost:3000/ws/chat";
+const TODO_WS_BASE = import.meta.env.VITE_TODO_WS_URL || "http://localhost:3000";
 const ICE_SERVERS = [{ urls: "stun:stun.l.google.com:19302" }];
 const BACKEND_TOKEN_KEY = "collabhub_backend_access_token";
 
@@ -42,8 +44,13 @@ export default function CollaborationRoom() {
   const [drawTool, setDrawTool] = useState("pen");
   const [drawColor, setDrawColor] = useState("#2b2118");
   const [drawSize, setDrawSize] = useState(4);
+  const [todoOpen, setTodoOpen] = useState(false);
+  const [todos, setTodos] = useState([]);
+  const [todoDraft, setTodoDraft] = useState("");
+  const [todoConnectionState, setTodoConnectionState] = useState("Connecting...");
 
   const wsRef = useRef(null);
+  const todoSocketRef = useRef(null);
   const chatEndRef = useRef(null);
   const drawCanvasRef = useRef(null);
   const drawCtxRef = useRef(null);
@@ -118,6 +125,13 @@ export default function CollaborationRoom() {
     const socket = wsRef.current;
     if (socket && socket.readyState === WebSocket.OPEN) {
       socket.send(JSON.stringify(payload));
+    }
+  };
+
+  const sendTodoEvent = (event, payload) => {
+    const socket = todoSocketRef.current;
+    if (socket?.connected) {
+      socket.emit(event, payload);
     }
   };
 
@@ -651,6 +665,78 @@ export default function CollaborationRoom() {
     setDraft("");
   };
 
+  const addTodo = (event) => {
+    event.preventDefault();
+    const text = todoDraft.trim();
+    if (!text) return;
+
+    sendTodoEvent("todo:create", { roomId: id, text });
+    setTodoDraft("");
+  };
+
+  const toggleTodo = (todoId, completed) => {
+    sendTodoEvent("todo:toggle", {
+      roomId: id,
+      todoId,
+      completed,
+    });
+  };
+
+  useEffect(() => {
+    if (!id || !user?._id) return;
+
+    const token = sessionStorage.getItem(BACKEND_TOKEN_KEY);
+    const socket = io(TODO_WS_BASE, {
+      auth: token ? { token } : undefined,
+      query: { roomId: id },
+      transports: ["websocket"],
+      withCredentials: false,
+    });
+
+    todoSocketRef.current = socket;
+    setTodoConnectionState("Connecting...");
+
+    socket.on("connect", () => {
+      setTodoConnectionState("Connected");
+      socket.emit("todo:join", { roomId: id });
+    });
+
+    socket.on("disconnect", () => {
+      setTodoConnectionState("Disconnected");
+    });
+
+    socket.on("connect_error", () => {
+      setTodoConnectionState("Connection error");
+    });
+
+    socket.on("todo:list", (payload) => {
+      setTodos(Array.isArray(payload?.todos) ? payload.todos : []);
+    });
+
+    socket.on("todo:created", (payload) => {
+      if (!payload?.todo) return;
+      setTodos((prev) => [...prev, payload.todo]);
+    });
+
+    socket.on("todo:updated", (payload) => {
+      if (!payload?.todo) return;
+      setTodos((prev) => prev.map((item) => (item.id === payload.todo.id ? payload.todo : item)));
+    });
+
+    socket.on("todo:error", (payload) => {
+      if (payload?.message) {
+        appendSystemMessage(`Todo: ${payload.message}`);
+      }
+    });
+
+    return () => {
+      socket.disconnect();
+      if (todoSocketRef.current === socket) {
+        todoSocketRef.current = null;
+      }
+    };
+  }, [id, user?._id]);
+
   return (
     <div className="page collaboration-page">
       <section className="collab-shell">
@@ -662,11 +748,63 @@ export default function CollaborationRoom() {
             <h1>{roomTitle}</h1>
             <p>Live collaboration workspace with chat, call controls, and shared whiteboard UI.</p>
           </div>
-          <div className="collab-statuses">
-            <span className="status-chip status-live">{connectionState}</span>
-            <span className="status-chip">{callParticipants.length || 1} Participants</span>
+          <div className="collab-header-controls">
+            <div className="collab-statuses">
+              <span className="status-chip status-live">{connectionState}</span>
+              <span className="status-chip">{callParticipants.length || 1} Participants</span>
+              <span className="status-chip">Todo {todoConnectionState}</span>
+            </div>
+            <button className="btn btn-outline btn-sm" type="button" onClick={() => setTodoOpen((v) => !v)}>
+              {todoOpen ? "Close Todo List" : "Todo List"}
+            </button>
           </div>
         </header>
+
+        {todoOpen && (
+          <section className="todo-panel" aria-live="polite">
+            <div className="todo-panel-head">
+              <div>
+                <h3>Shared Project Todo</h3>
+                <p>{todos.length} tasks synced for all collaborators</p>
+              </div>
+            </div>
+
+            <form className="todo-composer" onSubmit={addTodo}>
+              <input
+                type="text"
+                value={todoDraft}
+                onChange={(e) => setTodoDraft(e.target.value)}
+                placeholder="Add a task visible to everyone in this room..."
+                maxLength={240}
+              />
+              <button className="btn btn-primary" type="submit">Add</button>
+            </form>
+
+            <div className="todo-list" role="list">
+              {todos.length === 0 ? (
+                <p className="todo-empty">No tasks yet. Add the first shared todo.</p>
+              ) : (
+                todos.map((todo) => (
+                  <article key={todo.id} className={`todo-item ${todo.completed ? "done" : "pending"}`} role="listitem">
+                    <label className="todo-main">
+                      <input
+                        type="checkbox"
+                        checked={Boolean(todo.completed)}
+                        onChange={(e) => toggleTodo(todo.id, e.target.checked)}
+                      />
+                      <span>{todo.text}</span>
+                    </label>
+                    <small>
+                      {todo.completed
+                        ? `Completed by ${todo.completedBy?.name || "Collaborator"}`
+                        : `Not done - added by ${todo.createdBy?.name || "Collaborator"}`}
+                    </small>
+                  </article>
+                ))
+              )}
+            </div>
+          </section>
+        )}
 
         <section className="collab-contact-card">
           <div>

@@ -26,7 +26,6 @@ export const ROLE_OPTIONS = [
   'Project Manager',
   'System Architect',
   'Blockchain Developer',
-  // New additions
   'ML Engineer',
   'AI Engineer',
   'Cloud Engineer',

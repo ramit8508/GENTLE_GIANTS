@@ -42,7 +42,6 @@ export default function CollaborationRoom() {
   }, [id, location.state]);
 
   const ownerName = location.state?.owner?.name || "Project Owner";
-  const ownerEmail = location.state?.owner?.email || "";
 
   const historyByDay = useMemo(() => {
     const today = messages.map((m) => ({ ...m, dateLabel: "Today" }));
@@ -91,22 +90,6 @@ export default function CollaborationRoom() {
     setDraft("");
   };
 
-  const sendMail = (subject, body) => {
-    if (!ownerEmail) {
-      setContactHint("Collaborator email will be supplied by backend profile data.");
-      return;
-    }
-    window.location.href = `mailto:${ownerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-  };
-
-  const handleCallUser = () => {
-    sendMail(
-      `Call request for ${roomTitle}`,
-      `Hi ${ownerName},\n\nCan we jump on a quick project call? I am in the collaboration room and ready to discuss tasks.\n\nThanks.`
-    );
-    setContactHint("Call request draft opened in your email client.");
-  };
-
   return (
     <div className="page collaboration-page">
       <section className="collab-shell">
@@ -128,24 +111,12 @@ export default function CollaborationRoom() {
           <div>
             <h3>Collaborator Contact</h3>
             <p>
-              Connected with <strong>{ownerName}</strong>
-              {ownerEmail ? ` (${ownerEmail})` : " (email pending backend data)"}.
+              Connected with <strong>{ownerName}</strong>.
             </p>
           </div>
           <div className="collab-contact-actions">
-            <button className="btn btn-outline btn-sm" onClick={handleCallUser}>
-              Call User (Send Mail)
-            </button>
-            <button
-              className="btn btn-outline btn-sm"
-              onClick={() =>
-                sendMail(
-                  `Message from ${roomTitle}`,
-                  `Hi ${ownerName},\n\nSharing project collaboration update from the room.\n\nRegards.`
-                )
-              }
-            >
-              Email User
+            <button className="btn btn-outline btn-sm" onClick={() => setContactHint("Use room chat or live call controls to coordinate in-app.")}>
+              Start In-App Coordination
             </button>
           </div>
           {contactHint && <div className="collab-contact-hint">{contactHint}</div>}

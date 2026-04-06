@@ -1,7 +1,6 @@
 const mongoose=require("mongoose")
 const jwt=require("jsonwebtoken")
 const bcrypt=require("bcrypt")
-const crypto=require("crypto")
 const userSchema=new mongoose.Schema({
   name:
   {
@@ -50,30 +49,9 @@ const userSchema=new mongoose.Schema({
     type:String,
     trim:true
   },
-  isEmailVerified:
-  {
-    type:Boolean,
-    required:false
-  },
   refreshToken:
   {
     type:String,
-  },
-  forgotPasswordToken:
-  {
-    type:String,
-  },
-  forgotPasswordExpiry:
-  {
-    type:Date,
-  },
-  emailVerificationToken:
-  {
-    type:String,
-  },
-  emailVerificationExpiry:
-  {
-    type:Date,
   }
 },{ timestamps:true})
 
@@ -108,19 +86,5 @@ userSchema.methods.generateRefreshToken=function(){
     }
   )
 }
-userSchema.methods.generateTemporaryToken=function()
-{
-    const unhashedToken=crypto
-    .randomBytes(32)
-    .toString("hex")
-    const hashedToken=crypto
-    .createHash("sha256")
-    .update(unhashedToken)
-    .digest("hex")
-    const tokenExpiry=Date.now()+(20*60*1000) //20 mins
-
-    return {unhashedToken,hashedToken,tokenExpiry}
-}
-
 const userModel=mongoose.model("User",userSchema)
 module.exports=userModel

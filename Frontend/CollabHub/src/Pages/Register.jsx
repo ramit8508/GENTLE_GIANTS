@@ -69,7 +69,6 @@ export default function Register() {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
   const [submitError, setSubmitError] = useState("");
-  const [verificationNotice, setVerificationNotice] = useState("");
   const [loading, setLoading] = useState(false);
   const { register, isLoggedIn, loading: loadingAuth } = useAuth();
   const navigate = useNavigate();
@@ -106,7 +105,6 @@ export default function Register() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     setSubmitError("");
-    setVerificationNotice("");
 
     // Mark all fields as touched and run full validation
     const allTouched = Object.keys(form).reduce((acc, key) => ({ ...acc, [key]: true }), {});
@@ -119,9 +117,7 @@ export default function Register() {
     setLoading(true);
     try {
       await register(form);
-      setVerificationNotice(
-        `Verify your email. We have sent the verification mail on ${form.email}.`
-      );
+      navigate("/", { replace: true });
     } catch (err) {
       setSubmitError(err.response?.data?.message || "Registration failed. Please try again.");
     } finally {
@@ -143,7 +139,6 @@ export default function Register() {
         </div>
 
         {submitError && <div className="alert alert-error">{submitError}</div>}
-        {verificationNotice && <div className="alert alert-success">{verificationNotice}</div>}
 
         <form onSubmit={handleSubmit} className="auth-form" noValidate>
           <div className="form-row">
@@ -260,15 +255,6 @@ export default function Register() {
           <button type="submit" className="btn btn-primary btn-full" disabled={loading}>
             {loading ? <span className="spinner-sm"></span> : "Sign Up"}
           </button>
-          {verificationNotice && (
-            <button
-              type="button"
-              className="btn btn-outline btn-full"
-              onClick={() => navigate("/login")}
-            >
-              Go to Login
-            </button>
-          )}
         </form>
 
         <p className="auth-footer">

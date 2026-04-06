@@ -37,6 +37,8 @@ export default function ProjectDetail() {
     m => String(m.user?._id || m.user) === String(user._id)
   );
 
+  const hasTeamMembers = (project?.members?.length || 0) > 0;
+
   if (fetching) {
     return (
       <div className="page">
@@ -79,24 +81,6 @@ export default function ProjectDetail() {
     } catch (err) {
        setMessage(err.response?.data?.message || 'Invite failed');
     }
-  };
-
-  const sendEmail = (subject, body) => {
-    const ownerEmail = project?.created_by?.email;
-    if (!ownerEmail) {
-      setMessage('Owner email is not available yet. Backend can attach verified contact details.');
-      return;
-    }
-    const link = `mailto:${ownerEmail}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
-    window.location.href = link;
-  };
-
-  const handleRequestCall = () => {
-    sendEmail(
-      `Call request for project: ${project?.title || 'CollabHub project'}`,
-      `Hi ${project?.created_by?.name || 'there'},%0D%0A%0D%0AI want to discuss collaboration details for your project.%0D%0A%0D%0AThanks.`
-    );
-    setMessage('Call request draft opened in your email client.');
   };
 
   return (
@@ -165,28 +149,6 @@ export default function ProjectDetail() {
             </div>
           )}
 
-          {isLoggedIn && !isCreator && (
-            <div className="detail-section" style={{ borderTop: '1px solid var(--border)', paddingTop: '20px', marginTop: '16px' }}>
-              <h4>Contact Project Owner</h4>
-              <div style={{ display: 'flex', gap: '10px', flexWrap: 'wrap' }}>
-                <button className="btn btn-outline btn-sm" onClick={handleRequestCall}>
-                  Call User (Send Mail)
-                </button>
-                <button
-                  className="btn btn-outline btn-sm"
-                  onClick={() =>
-                    sendEmail(
-                      `Collaboration query: ${project?.title || 'Project'}`,
-                      `Hi ${project?.created_by?.name || 'there'},%0D%0A%0D%0AI would like to connect regarding your project collaboration.%0D%0A%0D%0AThanks.`
-                    )
-                  }
-                >
-                  Email User
-                </button>
-              </div>
-            </div>
-          )}
-
           {isLoggedIn && isCreator && (
             <div className="detail-section" style={{ borderTop: '1px solid var(--border)', paddingTop: '24px', marginTop: '24px' }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px' }}>
@@ -228,7 +190,9 @@ export default function ProjectDetail() {
               )}
 
               <div className="stagger-children">
-                {recommendations.map((rec, i) => (
+                {[...recommendations]
+                  .sort((a, b) => (Number(b?.percentage) || 0) - (Number(a?.percentage) || 0))
+                  .map((rec, i) => (
                   <div key={i} className="ai-recommendation-card fade-in" style={{ animationDelay: `${i * 0.1}s` }}>
                     <div className="ai-match-header">
                       <div className="ai-match-info">
@@ -275,16 +239,22 @@ export default function ProjectDetail() {
               <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
                 This is your project. Manage it from <a href="/my-projects">My Projects</a>.
               </p>
-              <button
-                className="btn btn-primary"
-                onClick={() =>
-                  navigate(`/project/${project._id}/collaboration`, {
-                    state: { projectTitle: project.title, owner: project.created_by },
-                  })
-                }
-              >
-                Open Collaboration Room
-              </button>
+              {hasTeamMembers ? (
+                <button
+                  className="btn btn-primary"
+                  onClick={() =>
+                    navigate(`/project/${project._id}/collaboration`, {
+                      state: { projectTitle: project.title, owner: project.created_by },
+                    })
+                  }
+                >
+                  Open Collaboration Room
+                </button>
+              ) : (
+                <p style={{ fontSize: '0.8125rem', color: 'var(--text-muted)', margin: 0 }}>
+                  Add at least one team member to unlock the collaboration room.
+                </p>
+              )}
             </div>
           )}
 

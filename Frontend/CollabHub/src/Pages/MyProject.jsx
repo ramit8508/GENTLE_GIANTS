@@ -119,7 +119,10 @@ export default function MyProjects() {
               <p>Start by creating your first project!</p>
             </div>
           )}
-          {data.createdProjects?.map(project => (
+          {data.createdProjects?.map(project => {
+            const hasTeamMembers = (project.members?.length || 0) > 0;
+
+            return (
             <div key={project._id} className="project-card project-card-detailed">
               <div className="project-card-top">
                 <div>
@@ -149,13 +152,19 @@ export default function MyProjects() {
               </div>
 
               <div style={{ marginTop: '12px' }}>
-                <Link
-                  to={`/project/${project._id}/collaboration`}
-                  state={{ projectTitle: project.title, owner: project.created_by }}
-                  className="btn btn-primary btn-sm"
-                >
-                  Open Collaboration Room
-                </Link>
+                {hasTeamMembers ? (
+                  <Link
+                    to={`/project/${project._id}/collaboration`}
+                    state={{ projectTitle: project.title, owner: project.created_by }}
+                    className="btn btn-primary btn-sm"
+                  >
+                    Open Collaboration Room
+                  </Link>
+                ) : (
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                    Add at least one team member to open the collaboration room.
+                  </p>
+                )}
               </div>
 
               {/* Members */}
@@ -240,7 +249,8 @@ export default function MyProjects() {
                 </div>
               )}
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 
@@ -253,7 +263,10 @@ export default function MyProjects() {
               <p>Browse projects and request to join!</p>
             </div>
           )}
-          {data.joinedProjects?.map(project => (
+          {data.joinedProjects?.map(project => {
+            const hasTeamMembers = (project.members?.length || 0) > 0;
+
+            return (
             <div key={project._id} className="project-card">
               <div className="project-card-header">
                 <Link to={`/project/${project._id}`} state={{ project }} style={{ textDecoration: 'none', color: 'inherit', opacity: 1 }}><h3 className="project-title">{project.title}</h3></Link>
@@ -268,16 +281,23 @@ export default function MyProjects() {
                 ))}
               </div>
               <div style={{ marginTop: '14px' }}>
-                <Link
-                  to={`/project/${project._id}/collaboration`}
-                  state={{ projectTitle: project.title, owner: project.created_by }}
-                  className="btn btn-primary btn-sm"
-                >
-                  Open Collaboration Room
-                </Link>
+                {hasTeamMembers ? (
+                  <Link
+                    to={`/project/${project._id}/collaboration`}
+                    state={{ projectTitle: project.title, owner: project.created_by }}
+                    className="btn btn-primary btn-sm"
+                  >
+                    Open Collaboration Room
+                  </Link>
+                ) : (
+                  <p style={{ fontSize: '12px', color: 'var(--text-muted)', margin: 0 }}>
+                    Collaboration room becomes available once the team is formed.
+                  </p>
+                )}
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
       )}
 

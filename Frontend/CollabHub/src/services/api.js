@@ -216,17 +216,17 @@ const mockAuthAPI = {
       name: data.name,
       email: data.email,
       password: data.password,
-      is_verified: false,
+      is_verified: true,
       skills: data.skills || [],
       github: data.github || "",
       bio: data.bio || "",
     };
     store.users.push(user);
     writeStore(store);
+    setSessionUserId(user._id);
     return ok({
       user: getSafeUser(user),
-      requiresEmailVerification: true,
-      message: "Verify your email. We have sent the verification mail on your email.",
+      message: "User registered successfully",
     });
   },
   login: async (data) => {
@@ -234,9 +234,6 @@ const mockAuthAPI = {
     const user = store.users.find((u) => u.email.toLowerCase() === data.email.toLowerCase());
     if (!user || user.password !== data.password) {
       return error(401, "Invalid email or password");
-    }
-    if (!user.is_verified) {
-      return error(403, "Verify your mail first");
     }
     setSessionUserId(user._id);
     return ok({ user: getSafeUser(user) });
@@ -515,9 +512,9 @@ const backendAuthAPI = {
     };
 
     const res = await backendClient.post("/auth/register", payload);
-    localStorage.removeItem(BACKEND_SESSION_KEY);
+    localStorage.setItem(BACKEND_SESSION_KEY, "1");
     const content = unwrapApiData(res) || {};
-    return { data: { user: content.user || content, requiresEmailVerification: true, message: res.data?.message } };
+    return { data: { user: content.user || content, message: res.data?.message } };
   },
   login: async (data) => {
     const res = await backendClient.post("/auth/login", data);
@@ -526,7 +523,11 @@ const backendAuthAPI = {
     return { data: { user: content.user || content } };
   },
   logout: async () => {
-    await backendClient.post("/auth/logout");
+    try {
+      await backendClient.post("/auth/logout");
+    } catch (err) {
+      if (err?.response?.status !== 401) throw err;
+    }
     localStorage.removeItem(BACKEND_SESSION_KEY);
     return { data: { success: true } };
   },

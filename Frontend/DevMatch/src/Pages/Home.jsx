@@ -5,16 +5,19 @@ import AdvancedFilter from '../components/AdvancedFilter'
 export default function Home () {
   const [search, setSearch] = useState('')
   const [showFilter, setShowFilter] = useState(false)
-  const [activeFilters, setActiveFilters] = useState({ tech_stack: [], roles: [] })
+  const [activeFilters, setActiveFilters] = useState({
+    tech_stack: [],
+    roles: []
+  })
   const [isLoggedIn] = useState(false) // TODO: Replace with actual auth state
 
-  const handleSearch = (e) => {
+  const handleSearch = e => {
     e.preventDefault()
     console.log('Search:', search, 'Filters:', activeFilters)
     // TODO: Implement search logic
   }
 
-  const handleApplyFilter = (filters) => {
+  const handleApplyFilter = filters => {
     setActiveFilters(filters)
     setShowFilter(false)
   }
@@ -170,22 +173,58 @@ export default function Home () {
               )}
             </div>
           </div>
-          </section>
-          {/* Explore Section */}
-      <section id="explore" className="section" style={{ padding: '40px 50px 100px 50px', background: '#fff', borderTop: '1px solid var(--border)' }}>
-        <div className="section-header" style={{ marginBottom: '60px' }}>
-          <div>
-            <h2 style={{ fontSize: '2rem',margin:'5px' }}>Explore Projects</h2>
-          </div>
-          {isLoggedIn && (
-            <Link to="/create-project" className="btn btn-primary">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-              New Project
-            </Link>
-          )}
-        </div>
         </section>
-        
+        {/* Explore Section */}
+        <section
+          id='explore'
+          className='section'
+          style={{
+            padding: '40px 50px 100px 50px',
+            background: '#fff',
+            borderTop: '1px solid var(--border)'
+          }}
+        >
+          <div className='section-header' style={{ marginBottom: '60px' }}>
+            <div>
+              <h2 style={{ fontSize: '2rem', margin: '5px' }}>
+                Explore Projects
+              </h2>
+            </div>
+            {isLoggedIn && (
+              <Link to='/create-project' className='btn btn-primary'>
+                <svg
+                  width='18'
+                  height='18'
+                  viewBox='0 0 24 24'
+                  fill='none'
+                  stroke='currentColor'
+                  strokeWidth='2'
+                >
+                  <line x1='12' y1='5' x2='12' y2='19' />
+                  <line x1='5' y1='12' x2='19' y2='12' />
+                </svg>
+                New Project
+              </Link>
+            )}
+          </div>
+          {loading && (
+            <div className='loading-screen'>
+              <div className='spinner'></div>
+            </div>
+          )}
+
+          {error && <div className='alert alert-error'>{error}</div>}
+          {!loading && projects.length === 0 && (
+          <div className="empty-state">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+              <polyline points="13 2 13 9 20 9"/>
+            </svg>
+            <h3>No Projects Found</h3>
+            <p>Try a different keyword or filter.</p>
+          </div>
+        )}
+        </section>
       </div>
     </>
   )

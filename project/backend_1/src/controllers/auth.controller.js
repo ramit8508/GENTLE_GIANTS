@@ -106,4 +106,14 @@ const logoutUser=async(req,res)=>{
         throw new ApiError(500,"Something went wrong")
     }
 }
-module.exports={registerUser,loginUser,logoutUser}
+const getProfile=async(req,res)=>{
+    const user=await userModel.findById(req.user._id).select("-password -refreshToken -createdAt -updatedAt")
+    try {
+        return res.status(200).json(new ApiResponse(200, user, "User fetched successfully"))
+    }
+    catch(error)
+    {
+        throw new ApiError(500,"Something went wrong")
+    }
+}
+module.exports={registerUser,loginUser,logoutUser,getProfile}

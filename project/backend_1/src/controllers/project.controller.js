@@ -17,8 +17,8 @@ const createProject=async(req,res)=>{
             roles_needed,
             createdBy:req.user._id
         })
-        const createProject=await projectModel.findById(project._id).select("-createdAt -updatedAt")
-        return res.status(201).json(new ApiResponse(201,"Project created successfully",createProject))
+        const createdProject=await projectModel.findById(project._id).select("-createdAt -updatedAt")
+        return res.status(201).json(new ApiResponse(201,"Project created successfully",createdProject))
     }
     catch (error) {
         throw new ApiError(500,"Something went wrong while creating a project",error.message)
@@ -77,4 +77,28 @@ const searchProject=async(req,res)=>{
         throw new ApiError(500,"Something went wrong while fetching projects",error.message)
     }
 }
-module.exports={createProject,getAllProjects,searchProject}
+const updateProject=async(req,res)=>{
+   try{
+    const allowedFields=["title","description","tech_stack","roles_needed"];
+            const updates = {};
+             allowedFields.forEach(field => {
+            if (req.body[field] !== undefined) updates[field] = req.body[field];
+        });
+            const updatedProject=await projectModel.findByIdAndUpdate(req.params.id,updates,{new:true})
+            return res.status(200).json({message:"Project updated successfully" ,
+                 updatedProject
+            })  
+        } catch (error) {
+            return res.status(500).json({message:error.message})
+        }
+    }   
+const deleteProject=async(req,res)=>{
+        try {
+            const deletedProject=await projectModel.findByIdAndDelete(req.params.id)
+            return res.status(200).json({message:"Project deleted successfully" ,deletedProject})
+        } catch (error) {
+            return res.status(500).json({message:error.message})
+        }
+    }   
+
+module.exports={createProject,getAllProjects,searchProject,updateProject,deleteProject}

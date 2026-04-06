@@ -5,4 +5,6 @@ const router=express.Router()
 router.route("/create").post(authmiddleware,projectControllers.createProject)
 router.route("/").get(projectControllers.getAllProjects)
 router.route("/search").get(projectControllers.searchProject)
+router.route("/update/:id").put(authmiddleware,projectControllers.updateProject)
+router.route("/delete/:id").delete(authmiddleware,projectControllers.deleteProject)
 module.exports=router

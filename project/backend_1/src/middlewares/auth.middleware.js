@@ -2,7 +2,7 @@ const jwt = require("jsonwebtoken")
 const userModel = require("../models/user.model")
 const ApiError = require("../utils/api-error")
 
-const verifyJWT = async (req, res, next) => {
+const authmiddleware = async (req, res, next) => {
     try {
         const token = req.cookies?.accessToken || req.headers?.authorization?.replace("Bearer ", "")
         if (!token) {
@@ -21,4 +21,5 @@ const verifyJWT = async (req, res, next) => {
     }
 }
 
-module.exports = { verifyJWT }
+
+module.exports = { authmiddleware }

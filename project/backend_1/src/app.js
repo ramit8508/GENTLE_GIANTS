@@ -7,4 +7,6 @@ app.use(express.json())
 app.use(cookieParser())
 const authRoutes=require("./routes/user.route")
 app.use("/api/auth",authRoutes)
+const projectRoutes=require("./routes/project.route")
+app.use("/api/project",projectRoutes)
 module.exports=app

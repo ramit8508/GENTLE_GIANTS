@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
 import { projectAPI } from '../services/api';
-import { useAuth } from '../context/AuthContext';
+import { useAuth } from '../Context/AuthContext';
 import AdvancedFilter from '../components/AdvancedFilter';
 
 export default function Home() {
@@ -278,11 +278,11 @@ export default function Home() {
       {/* About Section */}
       <section id="about" className="section" style={{ background: 'var(--bg-warm)', padding: '100px 20px', borderTop: '1.5px solid var(--border)', borderBottom: '1.5px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
         <div style={{ maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
-          <div className="section-header" style={{ justifyContent: 'center', textAlign: 'center', marginBottom: '60px' }}>
+          <div className="section-header" style={{ justifyContent: 'center', alignItems: 'center', flexDirection: 'column', textAlign: 'center', marginBottom: '60px', gap: '14px' }}>
             <h2 style={{ fontSize: '2.5rem' }}>Why Choose CollabHub?</h2>
-            <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', marginTop: '12px', maxWidth: '600px' }}>A professional platform designed to streamline team building and project collaboration.</p>
+            <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', marginTop: 0, maxWidth: '600px', lineHeight: 1.6 }}>A professional platform designed to streamline team building and project collaboration.</p>
           </div>
-          <div className="projects-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))' }}>
+          <div className="projects-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', alignItems: 'stretch' }}>
             <div className="project-card" style={{ textAlign: 'center', padding: '40px' }}>
               <div style={{ background: 'var(--accent-light)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
@@ -337,12 +337,12 @@ export default function Home() {
 
       {/* Join/CTA Section */}
       {!isLoggedIn && (
-        <section style={{ padding: '120px 20px', textAlign: 'center', background: 'var(--text)', color: '#fff' }}>
-          <div style={{ maxWidth: '600px', margin: '0 auto' }}>
-            <h2 style={{ fontSize: '2.5rem', marginBottom: '20px', fontFamily: 'Lora' }}>Ready to build something?</h2>
-            <p style={{ marginBottom: '40px', opacity: 0.8 }}>Join a community of 5,000+ creators sharing their projects and finding teams.</p>
-            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center' }}>
-              <Link to="/register" className="btn" style={{ background: 'var(--accent)', color: '#fff', padding: '14px 40px', fontSize: '1rem', border: 'none' }}>Join the Hub Today</Link>
+        <section style={{ padding: '110px 20px', background: 'var(--bg-warm)', borderTop: '1.5px solid var(--border)' }}>
+          <div style={{ maxWidth: '760px', margin: '0 auto', textAlign: 'center', background: 'var(--bg-card)', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-lg)', boxShadow: 'var(--shadow-md)', padding: '56px 28px' }}>
+            <h2 style={{ fontSize: '2.3rem', marginBottom: '16px', fontFamily: 'Outfit, sans-serif', color: 'var(--text)', letterSpacing: '-0.02em' }}>Ready to build something?</h2>
+            <p style={{ marginBottom: '34px', color: 'var(--text-secondary)', fontSize: '1.05rem', lineHeight: 1.7 }}>Join a community of 5,000+ creators sharing their projects and finding teams.</p>
+            <div style={{ display: 'flex', gap: '16px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <Link to="/register" className="btn btn-primary" style={{ padding: '14px 38px', fontSize: '1rem' }}>Join the Hub Today</Link>
             </div>
           </div>
         </section>

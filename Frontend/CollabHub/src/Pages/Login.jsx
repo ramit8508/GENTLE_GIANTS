@@ -1,7 +1,7 @@
 // pages/Login.jsx
 import { useState } from "react";
 import { Link, useNavigate, Navigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../Context/AuthContext";
 
 export default function Login() {
   const [form, setForm] = useState({ email: "", password: "" });

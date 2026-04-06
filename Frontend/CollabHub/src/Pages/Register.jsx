@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate, Navigate } from "react-router-dom";
-import { useAuth } from "../context/AuthContext";
+import { useAuth } from "../Context/AuthContext";
 import TagSelector from "../components/TagSelector";
 import { TECH_STACK_OPTIONS } from '../constants/options';
 

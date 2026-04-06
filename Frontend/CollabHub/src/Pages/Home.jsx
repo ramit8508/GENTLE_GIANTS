@@ -14,6 +14,10 @@ export default function Home() {
   const { isLoggedIn } = useAuth();
   const [activeFaq, setActiveFaq] = useState(null);
   const [visibleCount, setVisibleCount] = useState(6);
+  const [hackathonSearch, setHackathonSearch] = useState('');
+  const [hackathonLocation, setHackathonLocation] = useState('all');
+  const [hackathonMode, setHackathonMode] = useState('all');
+  const [showHackathonFilter, setShowHackathonFilter] = useState(false);
 
   const fetchProjects = async (params = {}) => {
     setLoading(true);
@@ -77,6 +81,12 @@ export default function Home() {
     setShowFilter(false);
   };
 
+  const handleHackathonSearch = (e) => {
+    e.preventDefault();
+  };
+
+  const hasHackathonFilters = hackathonLocation !== 'all' || hackathonMode !== 'all';
+
   const faqs = [
     {
       q: "How do I start a collaboration?",
@@ -96,6 +106,98 @@ export default function Home() {
     }
   ];
 
+  const aboutHighlights = [
+    {
+      title: 'Build Professional Networks',
+      description: 'Work with skilled developers, designers, and product thinkers. Build meaningful long-term collaborations around outcomes, not just ideas.',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+      )
+    },
+    {
+      title: 'Accelerate Learning And Growth',
+      description: 'Gain practical, portfolio-ready experience through real execution. Learn modern workflows by shipping with focused teams.',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
+          <polyline points="16 18 22 12 16 6"/>
+          <polyline points="8 6 2 12 8 18"/>
+        </svg>
+      )
+    },
+    {
+      title: 'Deliver Better Results Faster',
+      description: 'Align roles, reduce coordination friction, and move from concept to delivery with clear ownership and collaboration.',
+      icon: (
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2">
+          <path d="M12 19l7-7 3 3-7 7-3-3z"/>
+          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
+          <path d="M2 2l7.586 7.586"/>
+          <circle cx="11" cy="11" r="2"/>
+        </svg>
+      )
+    }
+  ];
+
+  const aboutStats = [
+    { label: 'Collaboration Focus', value: 'Project-Driven' },
+    { label: 'Community', value: 'Multi-Disciplinary' },
+    { label: 'Workflow', value: 'Structured And Transparent' }
+  ];
+
+  const hackathons = [
+    {
+      id: 'hack-1',
+      title: 'Build for Bharat Hackathon 2026',
+      organizer: 'India Tech Collective',
+      description: 'Create scalable civic-tech solutions for education, health, and public service workflows.',
+      tracks: ['Civic Tech', 'AI', 'Web Platform'],
+      mode: 'Online',
+      location: 'Bangalore',
+      duration: '48 Hours',
+      link: 'https://devpost.com/hackathons'
+    },
+    {
+      id: 'hack-2',
+      title: 'GenAI Product Sprint',
+      organizer: 'Innovators Guild',
+      description: 'Design and ship an AI-first product prototype solving real business or community pain points.',
+      tracks: ['GenAI', 'Product Design', 'Full Stack'],
+      mode: 'Offline',
+      location: 'Delhi',
+      duration: '72 Hours',
+      link: 'https://mlh.io/seasons/2026/events'
+    },
+    {
+      id: 'hack-3',
+      title: 'Green Code Challenge',
+      organizer: 'Sustainability Labs',
+      description: 'Build tools that reduce environmental impact using data, automation, and user-first interfaces.',
+      tracks: ['Climate', 'Data', 'Automation'],
+      mode: 'Online',
+      location: 'Mumbai',
+      duration: '36 Hours',
+      link: 'https://www.hackerearth.com/challenges/'
+    }
+  ];
+
+  const filteredHackathons = hackathons.filter((hackathon) => {
+    const query = hackathonSearch.trim().toLowerCase();
+    const location = hackathonLocation.toLowerCase();
+    const mode = hackathonMode.toLowerCase();
+
+    const textTarget = `${hackathon.title} ${hackathon.organizer} ${hackathon.description} ${hackathon.tracks.join(' ')}`.toLowerCase();
+    const matchesSearch = !query || textTarget.includes(query);
+    const matchesLocation = location === 'all' || String(hackathon.location || '').toLowerCase() === location;
+    const matchesMode = mode === 'all' || String(hackathon.mode || '').toLowerCase() === mode;
+
+    return matchesSearch && matchesLocation && matchesMode;
+  });
+
   return (
     <div className="page">
       {/* Hero */}
@@ -105,7 +207,7 @@ export default function Home() {
             Find Your Next <span className="gradient-text">Collaboration</span>
           </h1>
           <p className="hero-subtitle" style={{ margin: '0 auto 30px' }}>
-            A space for creators to connect, build teams, and bring ideas to life.
+            A professional collaboration space to discover teams, launch ambitious projects, and build meaningful outcomes.
           </p>
           
           <div className="search-container scale-in" style={{ width: '100%', maxWidth: '600px', margin: '0 auto', position: 'relative' }}>
@@ -273,37 +375,197 @@ export default function Home() {
             )}
           </div>
         )}
+
+      </section>
+  
+        <br/>
+      <section id="hackathons" className="section" style={{ padding: '40px 50px 100px 50px', background: '#fff', borderTop: '1px solid var(--border)' }}>
+        <div className="section-header" style={{ marginBottom: '28px' }}>
+          <div>
+            <h2 style={{ fontSize: '2rem', margin: '5px' }}>Explore Hackathons</h2>
+            <p style={{ color: 'var(--text-secondary)', margin: '6px 5px 0', fontSize: '0.95rem' }}>
+              Discover upcoming events and browse trusted websites containing hackathon info.
+            </p>
+          </div>
+        </div>
+
+        <div className="projects-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', marginBottom: '26px' }}>
+          <a href="https://devpost.com/hackathons" target="_blank" rel="noreferrer" className="project-card" style={{ textDecoration: 'none', color: 'inherit', padding: '18px' }}>
+            <h4 style={{ margin: 0, fontSize: '1rem' }}>Devpost</h4>
+            <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>Global student and professional hackathons.</p>
+          </a>
+          <a href="https://mlh.io/seasons/2026/events" target="_blank" rel="noreferrer" className="project-card" style={{ textDecoration: 'none', color: 'inherit', padding: '18px' }}>
+            <h4 style={{ margin: 0, fontSize: '1rem' }}>MLH Events</h4>
+            <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>Major League Hacking official event listings.</p>
+          </a>
+          <a href="https://www.hackerearth.com/challenges/" target="_blank" rel="noreferrer" className="project-card" style={{ textDecoration: 'none', color: 'inherit', padding: '18px' }}>
+            <h4 style={{ margin: 0, fontSize: '1rem' }}>HackerEarth</h4>
+            <p style={{ margin: '8px 0 0', color: 'var(--text-secondary)', fontSize: '0.88rem' }}>Hackathons and coding challenges in one place.</p>
+          </a>
+        </div>
+      
+        <div className="search-container" style={{ width: '100%', maxWidth: '760px', margin: '0 auto 26px', position: 'relative' }}>
+          <form onSubmit={handleHackathonSearch} className="search-bar" style={{ display: 'flex', gap: '8px' }}>
+            <div style={{ position: 'relative', flex: 1, display: 'flex', alignItems: 'center' }}>
+              <svg className="search-icon" style={{ left: '16px' }} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input
+                type="text"
+                placeholder="Search hackathons..."
+                value={hackathonSearch}
+                onChange={(e) => setHackathonSearch(e.target.value)}
+                style={{ paddingLeft: '48px' }}
+              />
+            </div>
+            <button
+              type="button"
+              className={`btn ${showHackathonFilter || hasHackathonFilters ? 'btn-primary' : 'btn-outline'}`}
+              onClick={() => setShowHackathonFilter(!showHackathonFilter)}
+              style={{ minWidth: '100px' }}
+            >
+              {showHackathonFilter ? 'Hide' : 'Filter'}
+            </button>
+            <button type="submit" className="btn btn-primary">Search</button>
+          </form>
+
+          {showHackathonFilter && (
+            <div className="fade-in" style={{ marginTop: '12px', border: '1.5px solid var(--border)', borderRadius: 'var(--radius-md)', padding: '12px', background: 'var(--bg-card)', display: 'flex', gap: '10px', flexWrap: 'wrap', alignItems: 'center' }}>
+              <select
+                value={hackathonLocation}
+                onChange={(e) => setHackathonLocation(e.target.value)}
+                style={{ minWidth: '220px', border: '1.5px solid var(--border-input)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontFamily: 'inherit', background: '#fff', color: 'var(--text)' }}
+              >
+                <option value="all">All Locations</option>
+                <option value="bangalore">Bangalore</option>
+                <option value="delhi">Delhi</option>
+                <option value="mumbai">Mumbai</option>
+              </select>
+              <select
+                value={hackathonMode}
+                onChange={(e) => setHackathonMode(e.target.value)}
+                style={{ minWidth: '170px', border: '1.5px solid var(--border-input)', borderRadius: 'var(--radius-sm)', padding: '10px 12px', fontFamily: 'inherit', background: '#fff', color: 'var(--text)' }}
+              >
+                <option value="all">All Modes</option>
+                <option value="online">Online</option>
+                <option value="offline">Offline</option>
+              </select>
+              <button
+                type="button"
+                className="btn btn-outline"
+                onClick={() => {
+                  setHackathonLocation('all');
+                  setHackathonMode('all');
+                }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+
+          {hasHackathonFilters && (
+            <div className="fade-in" style={{ marginTop: '14px', fontSize: '0.9rem', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"/>
+              </svg>
+              <span>{(hackathonLocation !== 'all' ? 1 : 0) + (hackathonMode !== 'all' ? 1 : 0)} filters applied</span>
+              <button
+                onClick={() => {
+                  setHackathonLocation('all');
+                  setHackathonMode('all');
+                }}
+                style={{ background: 'var(--accent-light)', border: 'none', color: 'var(--accent)', cursor: 'pointer', fontSize: '0.75rem', fontWeight: 600, padding: '2px 8px', borderRadius: '4px', marginLeft: '4px' }}
+              >
+                Clear
+              </button>
+            </div>
+          )}
+        </div>
+
+        {filteredHackathons.length === 0 ? (
+          <div className="empty-state">
+            <h3>No Hackathons Found</h3>
+            <p>Try a different location, keyword, or mode.</p>
+          </div>
+        ) : (
+          <div className="projects-grid stagger-children">
+            {filteredHackathons.map((hackathon) => (
+              <article key={hackathon.id} className="project-card fade-in">
+                <div className="project-card-header">
+                  <h3 className="project-title">{hackathon.title}</h3>
+                  <span className="project-author">by {hackathon.organizer}</span>
+                </div>
+
+                <p style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', lineHeight: '1.6' }}>
+                  {hackathon.description}
+                </p>
+
+                <div style={{ marginTop: 'auto', paddingTop: '16px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+                    <span style={{ fontSize: '0.7rem', color: 'var(--text-muted)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.05em', minWidth: '45px' }}>
+                      Tracks
+                    </span>
+                    <div className="project-tags">
+                      {hackathon.tracks.map((track, i) => (
+                        <span key={`${hackathon.id}_track_${i}`} className="tag tag-tech">{track}</span>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '10px', flexWrap: 'wrap' }}>
+                    <div className="project-tags">
+                      <span className="tag tag-role">{hackathon.mode}</span>
+                      <span className="tag">{hackathon.location}</span>
+                      <span className="tag">{hackathon.duration}</span>
+                    </div>
+
+                    <a
+                      href={hackathon.link}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="btn btn-outline btn-sm"
+                    >
+                      Explore
+                    </a>
+                  </div>
+                </div>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
       <br/>
       {/* About Section */}
       <section id="about" className="section" style={{ background: 'var(--bg-warm)', padding: '100px 20px', borderTop: '1.5px solid var(--border)', borderBottom: '1.5px solid var(--border)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-        <div style={{ maxWidth: '1000px', margin: '0 auto', width: '100%' }}>
-          <div className="section-header" style={{ justifyContent: 'center', alignItems: 'center', flexDirection: 'column', textAlign: 'center', marginBottom: '60px', gap: '14px' }}>
-            <h2 style={{ fontSize: '2.5rem' }}>Why Choose CollabHub?</h2>
-            <p style={{ fontSize: '1.1rem', color: 'var(--text-secondary)', marginTop: 0, maxWidth: '600px', lineHeight: 1.6 }}>A professional platform designed to streamline team building and project collaboration.</p>
+        <div style={{ maxWidth: '1080px', margin: '0 auto', width: '100%' }}>
+          <div className="section-header" style={{ justifyContent: 'center', alignItems: 'center', flexDirection: 'column', textAlign: 'center', marginBottom: '38px', gap: '14px' }}>
+            <h2 style={{ fontSize: '2.5rem', marginBottom: 0 }}>Why Teams Choose CollabHub</h2>
+            <p style={{ fontSize: '1.05rem', color: 'var(--text-secondary)', marginTop: 0, maxWidth: '760px', lineHeight: 1.7 }}>
+              CollabHub helps teams discover aligned collaborators, reduce execution friction, and ship stronger projects with confidence.
+            </p>
           </div>
+
+          <div className="projects-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', marginBottom: '26px' }}>
+            {aboutStats.map((stat) => (
+              <div key={stat.label} className="project-card" style={{ padding: '20px 22px', textAlign: 'center' }}>
+                <p style={{ margin: 0, fontSize: '0.8rem', textTransform: 'uppercase', letterSpacing: '0.08em', color: 'var(--text-muted)', fontWeight: 700 }}>
+                  {stat.label}
+                </p>
+                <h4 style={{ margin: '8px 0 0', fontSize: '1.15rem', fontFamily: 'Lora' }}>{stat.value}</h4>
+              </div>
+            ))}
+          </div>
+
           <div className="projects-grid" style={{ gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', alignItems: 'stretch' }}>
-            <div className="project-card" style={{ textAlign: 'center', padding: '40px' }}>
-              <div style={{ background: 'var(--accent-light)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-              </div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '16px', fontFamily: 'Lora' }}>Build Professional Networks</h3>
-              <p style={{ color: 'var(--text-secondary)' }}>Connect with skilled professionals, developers, and designers worldwide. Expand your network with collaborators who share your commitment to excellence.</p>
-            </div>
-            <div className="project-card" style={{ textAlign: 'center', padding: '40px' }}>
-              <div style={{ background: 'var(--accent-light)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-              </div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '16px', fontFamily: 'Lora' }}>Accelerate Growth</h3>
-              <p style={{ color: 'var(--text-secondary)' }}>Gain hands-on experience through real-world projects. Develop practical skills while delivering tangible results with experienced team members.</p>
-            </div>
-            <div className="project-card" style={{ textAlign: 'center', padding: '40px' }}>
-              <div style={{ background: 'var(--accent-light)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 24px' }}>
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" strokeWidth="2"><path d="M12 19l7-7 3 3-7 7-3-3z"/><path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/><path d="M2 2l7.586 7.586"/><circle cx="11" cy="11" r="2"/></svg>
-              </div>
-              <h3 style={{ fontSize: '1.25rem', marginBottom: '16px', fontFamily: 'Lora' }}>Deliver Results Faster</h3>
-              <p style={{ color: 'var(--text-secondary)' }}>Execute projects efficiently with the right team. Streamline collaboration and reduce time to market through structured project management.</p>
-            </div>
+            {aboutHighlights.map((item) => (
+              <article key={item.title} className="project-card" style={{ textAlign: 'center', padding: '36px' }}>
+                <div style={{ background: 'var(--accent-light)', width: '60px', height: '60px', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px' }}>
+                  {item.icon}
+                </div>
+                <h3 style={{ fontSize: '1.22rem', marginBottom: '12px', fontFamily: 'Lora' }}>{item.title}</h3>
+                <p style={{ color: 'var(--text-secondary)', lineHeight: 1.75, marginBottom: 0 }}>{item.description}</p>
+              </article>
+            ))}
           </div>
         </div>
       </section>

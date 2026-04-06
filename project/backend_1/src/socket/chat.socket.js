@@ -289,7 +289,22 @@ const joinRoom = async (ws, roomId) => {
 }
 
 const setupChatWebSocket = (server) => {
-    const wss = new WebSocketServer({ server, path: "/ws/chat" })
+    const wss = new WebSocketServer({ noServer: true, path: "/ws/chat" })
+
+    server.on("upgrade", (req, socket, head) => {
+        try {
+            const requestUrl = new URL(req.url, "http://localhost")
+            if (requestUrl.pathname !== "/ws/chat") {
+                return
+            }
+
+            wss.handleUpgrade(req, socket, head, (ws) => {
+                wss.emit("connection", ws, req)
+            })
+        } catch (error) {
+            socket.destroy()
+        }
+    })
 
     wss.on("connection", async (ws, req) => {
         try {

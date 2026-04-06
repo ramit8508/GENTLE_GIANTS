@@ -3,8 +3,10 @@ const jwt = require("jsonwebtoken")
 const mongoose = require("mongoose")
 const projectModel = require("../models/project.model")
 const projectTodoModel = require("../models/project-todo.model")
+const projectLinkModel = require("../models/project-link.model")
 
 const MAX_TODOS_PER_ROOM = 200
+const MAX_LINKS_PER_ROOM = 100
 
 const normalizeToken = (token) => {
     if (!token) return null
@@ -19,6 +21,9 @@ const normalizeToken = (token) => {
 const getTokenFromHandshake = (socket) => {
     const fromAuth = normalizeToken(socket.handshake?.auth?.token)
     if (fromAuth) return fromAuth
+
+    const fromQuery = normalizeToken(socket.handshake?.query?.token)
+    if (fromQuery) return fromQuery
 
     const fromHeader = normalizeToken(socket.handshake?.headers?.authorization)
     if (fromHeader) return fromHeader
@@ -78,6 +83,50 @@ const getRoomTodos = async (roomId) => {
     return todos.reverse().map(mapTodo)
 }
 
+const normalizeUrl = (value) => {
+    const raw = String(value || "").trim()
+    if (!raw) return ""
+
+    if (/^https?:\/\//i.test(raw)) {
+        return raw
+    }
+
+    return `https://${raw}`
+}
+
+const isValidHttpUrl = (value) => {
+    try {
+        const parsed = new URL(value)
+        return parsed.protocol === "http:" || parsed.protocol === "https:"
+    } catch (error) {
+        return false
+    }
+}
+
+const mapLink = (link) => ({
+    id: link._id.toString(),
+    roomId: link.roomId.toString(),
+    title: link.title,
+    url: link.url,
+    note: link.note || "",
+    createdBy: {
+        id: link.createdBy?.id ? link.createdBy.id.toString() : null,
+        name: link.createdBy?.name || "Unknown"
+    },
+    createdAt: link.createdAt,
+    updatedAt: link.updatedAt
+})
+
+const getRoomLinks = async (roomId) => {
+    const links = await projectLinkModel
+        .find({ roomId })
+        .sort({ createdAt: -1 })
+        .limit(MAX_LINKS_PER_ROOM)
+        .lean()
+
+    return links.reverse().map(mapLink)
+}
+
 const ensureRoomAccess = async (socket, roomId) => {
     const project = await validateProjectRoom(roomId)
     if (!project) {
@@ -95,8 +144,11 @@ const ensureRoomAccess = async (socket, roomId) => {
 
 const setupTodoSocket = (server) => {
     const io = new Server(server, {
+        path: "/ws/todo",
         cors: {
-            origin: process.env.CORS_ORIGIN || "http://localhost:5173",
+            origin: process.env.CORS_ORIGIN
+                ? process.env.CORS_ORIGIN.split(",").map((origin) => origin.trim())
+                : ["http://localhost:5173", "http://127.0.0.1:5173"],
             credentials: true
         }
     })
@@ -134,6 +186,9 @@ const setupTodoSocket = (server) => {
 
             const todos = await getRoomTodos(roomId)
             socket.emit("todo:list", { roomId, todos })
+
+            const links = await getRoomLinks(roomId)
+            socket.emit("link:list", { roomId, links })
         }
 
         socket.emit("todo:connected", {
@@ -141,7 +196,11 @@ const setupTodoSocket = (server) => {
             usage: {
                 join: { event: "todo:join", payload: { roomId: "<projectId>" } },
                 create: { event: "todo:create", payload: { roomId: "<projectId>", text: "Add API tests" } },
-                toggle: { event: "todo:toggle", payload: { roomId: "<projectId>", todoId: "<todoId>", completed: true } }
+                toggle: { event: "todo:toggle", payload: { roomId: "<projectId>", todoId: "<todoId>", completed: true } },
+                linkCreate: {
+                    event: "link:create",
+                    payload: { roomId: "<projectId>", title: "Node docs", url: "https://nodejs.org/docs" }
+                }
             }
         })
 
@@ -241,6 +300,50 @@ const setupTodoSocket = (server) => {
             io.to(roomId).emit("todo:updated", {
                 roomId,
                 todo: mapTodo(todo)
+            })
+        })
+
+        socket.on("link:create", async (payload = {}) => {
+            const roomId = String(payload.roomId || socket.data.roomId || "").trim()
+            const title = String(payload.title || "").trim()
+            const url = normalizeUrl(payload.url)
+            const note = String(payload.note || "").trim()
+
+            if (!roomId) {
+                socket.emit("todo:error", { message: "roomId is required to save link" })
+                return
+            }
+
+            if (!title) {
+                socket.emit("todo:error", { message: "Link title is required" })
+                return
+            }
+
+            if (!url || !isValidHttpUrl(url)) {
+                socket.emit("todo:error", { message: "Please provide a valid http/https link" })
+                return
+            }
+
+            const isAllowed = await ensureRoomAccess(socket, roomId)
+            if (!isAllowed) return
+
+            socket.data.roomId = roomId
+            socket.join(roomId)
+
+            const savedLink = await projectLinkModel.create({
+                roomId,
+                title,
+                url,
+                note,
+                createdBy: {
+                    id: socket.user.id,
+                    name: socket.user.name
+                }
+            })
+
+            io.to(roomId).emit("link:created", {
+                roomId,
+                link: mapLink(savedLink)
             })
         })
     })

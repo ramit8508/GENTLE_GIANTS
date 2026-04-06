@@ -45,9 +45,14 @@ export default function CollaborationRoom() {
   const [drawColor, setDrawColor] = useState("#2b2118");
   const [drawSize, setDrawSize] = useState(4);
   const [todoOpen, setTodoOpen] = useState(false);
+  const [linksOpen, setLinksOpen] = useState(false);
   const [todos, setTodos] = useState([]);
   const [todoDraft, setTodoDraft] = useState("");
   const [todoConnectionState, setTodoConnectionState] = useState("Connecting...");
+  const [savedLinks, setSavedLinks] = useState([]);
+  const [linkTitleDraft, setLinkTitleDraft] = useState("");
+  const [linkUrlDraft, setLinkUrlDraft] = useState("");
+  const [linkNoteDraft, setLinkNoteDraft] = useState("");
 
   const wsRef = useRef(null);
   const todoSocketRef = useRef(null);
@@ -682,14 +687,34 @@ export default function CollaborationRoom() {
     });
   };
 
+  const addSharedLink = (event) => {
+    event.preventDefault();
+
+    const title = linkTitleDraft.trim();
+    const url = linkUrlDraft.trim();
+    const note = linkNoteDraft.trim();
+    if (!title || !url) return;
+
+    sendTodoEvent("link:create", {
+      roomId: id,
+      title,
+      url,
+      note,
+    });
+
+    setLinkTitleDraft("");
+    setLinkUrlDraft("");
+    setLinkNoteDraft("");
+  };
+
   useEffect(() => {
     if (!id || !user?._id) return;
 
-    const token = sessionStorage.getItem(BACKEND_TOKEN_KEY);
+    const token = sessionStorage.getItem(BACKEND_TOKEN_KEY) || localStorage.getItem(BACKEND_TOKEN_KEY);
     const socket = io(TODO_WS_BASE, {
+      path: "/ws/todo",
       auth: token ? { token } : undefined,
-      query: { roomId: id },
-      transports: ["websocket"],
+      query: token ? { roomId: id, token } : { roomId: id },
       withCredentials: false,
     });
 
@@ -705,12 +730,19 @@ export default function CollaborationRoom() {
       setTodoConnectionState("Disconnected");
     });
 
-    socket.on("connect_error", () => {
+    socket.on("connect_error", (err) => {
       setTodoConnectionState("Connection error");
+      if (err?.message) {
+        appendSystemMessage(`Todo: ${err.message}`);
+      }
     });
 
     socket.on("todo:list", (payload) => {
       setTodos(Array.isArray(payload?.todos) ? payload.todos : []);
+    });
+
+    socket.on("link:list", (payload) => {
+      setSavedLinks(Array.isArray(payload?.links) ? payload.links : []);
     });
 
     socket.on("todo:created", (payload) => {
@@ -721,6 +753,11 @@ export default function CollaborationRoom() {
     socket.on("todo:updated", (payload) => {
       if (!payload?.todo) return;
       setTodos((prev) => prev.map((item) => (item.id === payload.todo.id ? payload.todo : item)));
+    });
+
+    socket.on("link:created", (payload) => {
+      if (!payload?.link) return;
+      setSavedLinks((prev) => [...prev, payload.link]);
     });
 
     socket.on("todo:error", (payload) => {
@@ -754,9 +791,14 @@ export default function CollaborationRoom() {
               <span className="status-chip">{callParticipants.length || 1} Participants</span>
               <span className="status-chip">Todo {todoConnectionState}</span>
             </div>
-            <button className="btn btn-outline btn-sm" type="button" onClick={() => setTodoOpen((v) => !v)}>
-              {todoOpen ? "Close Todo List" : "Todo List"}
-            </button>
+            <div className="collab-header-actions">
+              <button className="btn btn-sm todo-toggle-btn" type="button" onClick={() => setTodoOpen((v) => !v)}>
+                {todoOpen ? "Close Todo List" : "Todo List"}
+              </button>
+              <button className="btn btn-sm links-toggle-btn" type="button" onClick={() => setLinksOpen((v) => !v)}>
+                {linksOpen ? "Close Important Links & Notes" : "Important Links & Notes"}
+              </button>
+            </div>
           </div>
         </header>
 
@@ -799,6 +841,58 @@ export default function CollaborationRoom() {
                         ? `Completed by ${todo.completedBy?.name || "Collaborator"}`
                         : `Not done - added by ${todo.createdBy?.name || "Collaborator"}`}
                     </small>
+                  </article>
+                ))
+              )}
+            </div>
+
+          </section>
+        )}
+
+        {linksOpen && (
+          <section className="links-panel" aria-live="polite">
+            <div className="links-panel-head">
+              <h3>Important Links & Notes</h3>
+              <p>{savedLinks.length} links shared with collaborators</p>
+            </div>
+
+            <form className="links-composer" onSubmit={addSharedLink}>
+              <input
+                type="text"
+                value={linkTitleDraft}
+                onChange={(e) => setLinkTitleDraft(e.target.value)}
+                placeholder="Link title (example: Node.js Docs)"
+                maxLength={120}
+              />
+              <input
+                type="url"
+                value={linkUrlDraft}
+                onChange={(e) => setLinkUrlDraft(e.target.value)}
+                placeholder="https://nodejs.org/docs"
+                maxLength={2048}
+              />
+              <input
+                type="text"
+                value={linkNoteDraft}
+                onChange={(e) => setLinkNoteDraft(e.target.value)}
+                placeholder="Note (optional): why this link matters"
+                maxLength={300}
+              />
+              <button className="btn btn-primary" type="submit">Save Link</button>
+            </form>
+
+            <div className="links-list" role="list">
+              {savedLinks.length === 0 ? (
+                <p className="links-empty">No links shared yet.</p>
+              ) : (
+                savedLinks.map((link) => (
+                  <article key={link.id} className="links-item" role="listitem">
+                    <div>
+                      <strong>{link.title}</strong>
+                      <a href={link.url} target="_blank" rel="noreferrer">{link.url}</a>
+                      {link.note && <p className="links-note">{link.note}</p>}
+                    </div>
+                    <small>Saved by {link.createdBy?.name || "Collaborator"}</small>
                   </article>
                 ))
               )}
